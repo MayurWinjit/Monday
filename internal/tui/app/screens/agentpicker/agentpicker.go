@@ -1,7 +1,3 @@
-// Package agentpicker is the Agent Picker screen (architect-plan section
-// 7.3): a multi-select list of every discovered agent, each row showing
-// name, description, and a (project) tag when a project-level agent
-// overrides a global one of the same name.
 package agentpicker
 
 import (
@@ -72,9 +68,6 @@ func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
 	return m, nil
 }
 
-// selectedIndices returns the indices selected (true), sorted ascending so
-// the resulting pipeline sequence follows catalog order regardless of the
-// order rows were toggled in.
 func selectedIndices(selected map[int]bool) []int {
 	idx := make([]int, 0, len(selected))
 	for i, v := range selected {

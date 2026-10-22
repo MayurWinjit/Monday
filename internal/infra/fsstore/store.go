@@ -1,10 +1,3 @@
-// Package fsstore implements the domain.Store port against the ~/.monday
-// directory layout described in architect-plan.md section 5.1. Every write
-// (pipeline, session, history, interactions, docs) goes through
-// writeFileAtomic: write to a temp file in the same directory, then
-// os.Rename over the target. A crash mid-write can therefore never leave a
-// half-written JSON file behind, which is the mechanism behind the "a
-// failed step must not corrupt session.json" NFR.
 package fsstore
 
 import (
@@ -33,9 +26,6 @@ var (
 	_ graphify.Backend    = (*Store)(nil)
 )
 
-// Store implements domain.Store rooted at <homeDir>/.monday. homeDir is
-// injected rather than resolved internally via os.UserHomeDir so tests can
-// point it at t.TempDir().
 type Store struct {
 	root string
 }
@@ -60,8 +50,6 @@ func (s *Store) EnsureLayout() error {
 	}
 	return nil
 }
-
-// --- pipelines ---
 
 func (s *Store) pipelinePath(name string) string {
 	return filepath.Join(s.pipelinesDir(), name+".json")
@@ -110,8 +98,6 @@ func (s *Store) ListPipelines() ([]pipeline.Pipeline, error) {
 	return pipelines, nil
 }
 
-// --- sessions ---
-
 func (s *Store) CreateSessionDir(id string) error {
 	dir := s.sessionDir(id)
 	for _, d := range []string{dir, filepath.Join(dir, "docs"), filepath.Join(dir, "interactions")} {
@@ -145,8 +131,6 @@ func (s *Store) LoadHistory(id string) (history.History, error) {
 	return h, err
 }
 
-// --- interactions ---
-
 func (s *Store) interactionsPath(sessionID, file string) string {
 	return filepath.Join(s.sessionDir(sessionID), "interactions", file+".json")
 }
@@ -161,8 +145,6 @@ func (s *Store) LoadInteractions(sessionID, file string) (interaction.Interactio
 	return f, err
 }
 
-// --- docs ---
-
 func (s *Store) DocsDir(sessionID string) string {
 	return filepath.Join(s.sessionDir(sessionID), "docs")
 }
@@ -175,8 +157,6 @@ func (s *Store) WriteDoc(sessionID, relPath string, content []byte) error {
 	}
 	return writeFileAtomic(path, content)
 }
-
-// --- graphs ---
 
 func (s *Store) ListSavedGraphs() ([]string, error) {
 	entries, err := os.ReadDir(s.graphsDir())
@@ -197,8 +177,6 @@ func (s *Store) ListSavedGraphs() ([]string, error) {
 	return labels, nil
 }
 
-// --- shared read/write helpers ---
-
 func writeJSONAtomic(path string, v any) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -218,7 +196,7 @@ func writeFileAtomic(path string, data []byte) error {
 		return fmt.Errorf("fsstore: create temp in %s: %w", dir, err)
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath) // no-op once the rename below succeeds
+	defer os.Remove(tmpPath)
 
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()

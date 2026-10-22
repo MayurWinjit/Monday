@@ -1,9 +1,3 @@
-// Package qa is the Q&A overlay (architect-plan section 7.3), embedded in
-// the Progress screen rather than being a routable ScreenID (section 7.1):
-// it is only ever reachable from, and always returns to, the progress
-// view. Model is a small self-contained component with its own Update/View
-// - Progress forwards every key to it while it is open and reacts to the
-// SubmittedMsg/ClosedMsg it produces.
 package qa
 
 import (
@@ -20,30 +14,19 @@ import (
 	"github.com/MayurWinjit/monday/internal/tui/theme"
 )
 
-// Interactions is the narrow slice of interaction.Service Model needs.
 type Interactions interface {
 	SubmitAnswers(sessionID, file string, answers map[string]string) (interaction.InteractionFile, error)
 }
 
-// Sessions is the narrow slice of session.Service Model needs to resume the
-// agent once every question has been answered.
 type Sessions interface {
 	ResumeStep(sessionID, paneID, resumePrompt string) (session.Session, error)
 }
 
-// SubmittedMsg is produced once submitted answers have been persisted and
-// the agent resumed. Progress's Update clears its overlay and replaces its
-// session with Session on this message.
 type SubmittedMsg struct {
 	Session session.Session
 	Err     error
 }
 
-// ClosedMsg indicates the user dismissed the overlay (esc) without
-// submitting - answers already picked are kept in Model, not lost, in case
-// Progress reopens the same Model via enter before the agent times out
-// (there is no server-side timeout to race against, since the agent is
-// simply idle, not polling).
 type ClosedMsg struct{}
 
 type Model struct {
@@ -53,11 +36,11 @@ type Model struct {
 	sessionID string
 	paneID    string
 	agentName string
-	file      string // interactions file stem, no .json
+	file      string
 
 	questions []interaction.Question
-	cursor    int // which question
-	optCursor int // which option row; last index is "Other"
+	cursor    int
+	optCursor int
 	answers   map[string]string
 
 	other       textinput.Model
@@ -98,7 +81,7 @@ func (m Model) currentQuestion() interaction.Question {
 }
 
 func (m Model) optRowCount() int {
-	return len(m.currentQuestion().Options) + 1 // +1 for "Other"
+	return len(m.currentQuestion().Options) + 1
 }
 
 func (m Model) allAnswered() bool {
@@ -120,9 +103,6 @@ func (m Model) answeredCount() int {
 	return n
 }
 
-// nextUnansweredCursor finds the next question (starting after the
-// current one, wrapping) that has no answer yet. If every question is
-// already answered, the cursor is left where it is.
 func (m Model) nextUnansweredCursor() int {
 	for i := 1; i <= len(m.questions); i++ {
 		idx := (m.cursor + i) % len(m.questions)

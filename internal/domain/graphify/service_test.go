@@ -121,7 +121,6 @@ func TestInject_RefusesWhenARealDirectoryAlreadyExists(t *testing.T) {
 		t.Fatalf("expected Inject to refuse overwriting a real directory")
 	}
 
-	// the real directory and its contents must be untouched
 	data, err := os.ReadFile(filepath.Join(projectRoot, "graphify-out", "real-file.txt"))
 	if err != nil {
 		t.Fatalf("expected real-file.txt to survive, read error: %v", err)

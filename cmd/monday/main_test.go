@@ -9,9 +9,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/infra/socket"
 )
 
-// shortTempDir mirrors internal/infra/socket's helper: t.TempDir() embeds
-// the full test name and can exceed the sockaddr_un path length limit once
-// "/.monday/sessions/<id>/monday.sock" is appended.
 func shortTempDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "mnd")

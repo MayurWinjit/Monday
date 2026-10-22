@@ -1,8 +1,5 @@
 package agent
 
-// Merge starts from global, then overlays every project entry whose Name
-// matches (replacing it), and appends project-only entries. Project always
-// wins on a name clash. Pure function, no IO.
 func Merge(global, project []Agent) []Agent {
 	result := make([]Agent, 0, len(global)+len(project))
 	index := make(map[string]int, len(global))

@@ -7,7 +7,7 @@ func TestMerge(t *testing.T) {
 		name    string
 		global  []Agent
 		project []Agent
-		want    []string // expected names in order
+		want    []string
 		wantSrc map[string]AgentSource
 	}{
 		{

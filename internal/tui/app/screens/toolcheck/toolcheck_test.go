@@ -64,10 +64,7 @@ func TestView_FailureState_ListsEachMissingRequirement(t *testing.T) {
 }
 
 func TestView_TransientOKFrame_DoesNotClaimSomethingIsMissing(t *testing.T) {
-	// Regression: Update returns (m, switchScreenCmd) on success, but m
-	// itself still has checked=true - bubbletea renders View() on that
-	// returned model before the switch cmd's message is processed. That
-	// one transient frame must not falsely show the failure heading.
+
 	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
 	screen, _ := m.Update(resultMsg(infratoolcheck.Result{}))
@@ -110,8 +107,6 @@ func TestUpdate_QKeyQuits(t *testing.T) {
 	}
 }
 
-// New0 builds a Checker whose Run() is never actually invoked in this test
-// (we only check the pre-result view), so its dependencies can be trivial.
 func New0() *infratoolcheck.Checker {
 	return infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 }
@@ -121,9 +116,7 @@ type errNotFound string
 func (e errNotFound) Error() string { return string(e) + ": not found" }
 
 func TestUpdate_AlreadyRunningDoesNotBlock_CarriesIDToLaunch(t *testing.T) {
-	// Challenge #8 revision: AlreadyRunningID alone must never hard-stop
-	// here - it's forwarded to the Launch screen, which offers a
-	// "Terminate session" action instead.
+
 	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
 	screen, cmd := m.Update(resultMsg(infratoolcheck.Result{AlreadyRunningID: "abc-123"}))

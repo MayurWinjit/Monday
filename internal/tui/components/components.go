@@ -1,7 +1,3 @@
-// Package components holds reusable catppuccin-themed BubbleTea view
-// fragments shared across screens (architect-plan section 7.2): badges,
-// cards, buttons, pipeline step rows, and the help bar every screen ends
-// with. Pure functions - a string in, a styled string out, no tea.Model.
 package components
 
 import (
@@ -15,8 +11,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/tui/theme"
 )
 
-// Badge renders a short status pill colored per theme.StatusColor, falling
-// back to plain Subtext0 for an unrecognized status string.
 func Badge(status string) string {
 	color, ok := theme.StatusColor[status]
 	if !ok {
@@ -43,8 +37,6 @@ func statusGlyph(status string) string {
 	}
 }
 
-// Card renders a bordered box with an optional title, using the focused
-// (Mauve) or unfocused (Surface0) border color.
 func Card(title, body string, focused bool) string {
 	style := theme.BorderStyle
 	if focused {
@@ -57,7 +49,6 @@ func Card(title, body string, focused bool) string {
 	return style.Padding(1, 2).Render(content)
 }
 
-// Button renders a label as a focusable button, highlighted when focused.
 func Button(label string, focused bool) string {
 	style := lipgloss.NewStyle().Padding(0, 2).Foreground(theme.Text)
 	if focused {
@@ -68,8 +59,6 @@ func Button(label string, focused bool) string {
 	return style.Render("[ " + label + " ]")
 }
 
-// FormatElapsed renders a duration the way every stepped-progress row
-// does: MM:SS, truncated to the second.
 func FormatElapsed(d time.Duration) string {
 	d = d.Truncate(time.Second)
 	minutes := int(d.Minutes())
@@ -77,8 +66,6 @@ func FormatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
 }
 
-// ProgressRow renders one line of the stepped progress screen: index,
-// agent name, status badge, activity text, and an elapsed timer.
 func ProgressRow(step session.PipelineStep, elapsed time.Duration, selected bool) string {
 	marker := "  "
 	if selected {
@@ -108,8 +95,6 @@ func ProgressRow(step session.PipelineStep, elapsed time.Duration, selected bool
 	return row
 }
 
-// HelpBar renders the one-line dim help bar every screen ends with, e.g.
-// "↑/↓ move · enter select · q quit".
 func HelpBar(bindings ...string) string {
 	return theme.HelpBarStyle.Render(strings.Join(bindings, " · "))
 }

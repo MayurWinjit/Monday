@@ -62,8 +62,7 @@ func TestRun_NotInHerdrPane(t *testing.T) {
 }
 
 func TestRun_MissingHerdrSkipsPaneCheck(t *testing.T) {
-	// herdr missing means CurrentPaneID would exec a nonexistent binary;
-	// Run should not report NotInHerdrPane as a second, redundant failure.
+
 	c := NewWithLookPath(fakeHerdr{err: errors.New("should not matter")}, t.TempDir(), lookPathMissing("herdr"))
 	res := c.Run()
 	if res.NotInHerdrPane {
@@ -108,9 +107,7 @@ func TestRun_DetectsRunningSession(t *testing.T) {
 	if res.AlreadyRunningID != "s2" {
 		t.Fatalf("expected to detect running session s2, got %q", res.AlreadyRunningID)
 	}
-	// AlreadyRunningID is advisory, not a hard stop (challenge #8 revision):
-	// it must not keep OK() false, since the Launch screen - not this
-	// check - is what offers the user a way to resolve it (terminate).
+
 	if !res.OK() {
 		t.Fatalf("expected OK even while another session is running")
 	}

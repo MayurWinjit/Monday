@@ -1,7 +1,3 @@
-// Package pipelineorder is the Pipeline Ordering screen (architect-plan
-// section 7.3): lets the user arrange the picked agents into a run order,
-// repeat an agent via an explicit "add again" action, remove a step, and
-// optionally save the sequence as a named pipeline before continuing.
 package pipelineorder
 
 import (

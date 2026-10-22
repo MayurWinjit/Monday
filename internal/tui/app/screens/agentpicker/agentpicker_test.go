@@ -67,7 +67,7 @@ func TestUpdate_SpaceTogglesSelection(t *testing.T) {
 
 func TestUpdate_CursorWraps(t *testing.T) {
 	m := New(testAgents())
-	screen, _ := m.Update(key("up")) // wraps from 0 to last
+	screen, _ := m.Update(key("up"))
 	model := screen.(Model)
 	if model.cursor != 2 {
 		t.Fatalf("expected cursor to wrap to 2, got %d", model.cursor)
@@ -92,16 +92,16 @@ func TestUpdate_EnterWithNoSelectionShowsBanner(t *testing.T) {
 
 func TestUpdate_EnterWithSelectionSwitchesWithOrderedSequence(t *testing.T) {
 	m := New(testAgents())
-	// select reviewer (idx 2) then architect (idx 0) - out of visual order
-	screen, _ := m.Update(key("up")) // cursor -> 2 (reviewer)
+
+	screen, _ := m.Update(key("up"))
 	model := screen.(Model)
-	screen, _ = model.Update(key(" ")) // select reviewer
+	screen, _ = model.Update(key(" "))
 	model = screen.(Model)
-	screen, _ = model.Update(key("up")) // cursor -> 1
+	screen, _ = model.Update(key("up"))
 	model = screen.(Model)
-	screen, _ = model.Update(key("up")) // cursor -> 0 (architect)
+	screen, _ = model.Update(key("up"))
 	model = screen.(Model)
-	screen, _ = model.Update(key(" ")) // select architect
+	screen, _ = model.Update(key(" "))
 	model = screen.(Model)
 
 	_, cmd := model.Update(key("enter"))
@@ -120,7 +120,7 @@ func TestUpdate_EnterWithSelectionSwitchesWithOrderedSequence(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected a PipelineOrderPayload, got %T", switchMsg.Payload)
 	}
-	// catalog order, not selection order: architect (0) before reviewer (2)
+
 	if len(payload.Sequence) != 2 || payload.Sequence[0] != "architect" || payload.Sequence[1] != "reviewer" {
 		t.Fatalf("expected sequence [architect, reviewer] in catalog order, got %v", payload.Sequence)
 	}

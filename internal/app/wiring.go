@@ -1,6 +1,3 @@
-// Package app is the one dependency-injection point (architect-plan
-// section 2): Build constructs every infra implementation and injects it
-// into the domain services the TUI and the notify subcommand both use.
 package app
 
 import (
@@ -20,11 +17,8 @@ import (
 	"github.com/MayurWinjit/monday/internal/infra/toolcheck"
 )
 
-// Services is the one and only dependency-injection point: cmd/monday
-// builds it once, then hands it to either the TUI (internal/tui/app.New)
-// or the notify subcommand.
 type Services struct {
-	Store        *fsstore.Store // bootstrap + domain.Store/Backend implementations
+	Store        *fsstore.Store
 	ToolCheck    *toolcheck.Checker
 	Agents       *domainagent.Catalog
 	Pipelines    *pipeline.Store
@@ -35,8 +29,6 @@ type Services struct {
 	SkillWriter  *skillwriter.Writer
 }
 
-// Build constructs every infra implementation rooted at homeDir (normally
-// os.UserHomeDir()) and wires them into the domain services.
 func Build(homeDir string) (*Services, error) {
 	store := fsstore.New(homeDir)
 	if err := store.EnsureLayout(); err != nil {

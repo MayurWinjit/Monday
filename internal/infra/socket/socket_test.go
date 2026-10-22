@@ -11,9 +11,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 )
 
-// shortTempDir returns a temp directory much shorter than t.TempDir()'s
-// (which embeds the full test name and can exceed the ~104-byte sockaddr_un
-// path limit once "/sessions/<uuid>/monday.sock" is appended).
 func shortTempDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "mnd")
@@ -131,7 +128,7 @@ func TestServer_MalformedMessageGetsRejectedAck(t *testing.T) {
 	case msg := <-events:
 		t.Fatalf("expected no event to be pushed for malformed input, got %+v", msg)
 	case <-time.After(200 * time.Millisecond):
-		// expected: nothing arrived
+
 	}
 }
 
@@ -171,12 +168,11 @@ func TestServer_RemovesStaleSocketBeforeListening(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	// simulate a stale socket file left behind by a prior crashed run
 	stale, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatalf("create stale socket: %v", err)
 	}
-	stale.Close() // closes but the file may remain depending on platform
+	stale.Close()
 
 	server := NewServer(root)
 	_, closeFn, err := server.Listen("session-1")

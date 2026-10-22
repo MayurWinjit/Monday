@@ -43,7 +43,7 @@ func TestView_AskYesNo(t *testing.T) {
 
 func TestUpdate_NoSwitchesToProgressWithEmptyGraph(t *testing.T) {
 	m := New(nil, testPipeline(), "do the thing")
-	// default is "No" highlighted (m.yesHighlighted starts false)
+
 	_, cmd := m.Update(key("enter"))
 	if cmd == nil {
 		t.Fatalf("expected a switch command")
@@ -79,7 +79,7 @@ func TestUpdate_LeftRightTogglesChoice(t *testing.T) {
 
 func TestUpdate_YesTriggersGraphLoad(t *testing.T) {
 	m := New(testServices(), testPipeline(), "x")
-	screen, _ := m.Update(key("left")) // toggle to Yes
+	screen, _ := m.Update(key("left"))
 	model := screen.(Model)
 	_, cmd := model.Update(key("enter"))
 	if cmd == nil {
@@ -109,7 +109,7 @@ func TestUpdate_PickGraph_EnterSwitchesWithLabel(t *testing.T) {
 	screen, _ := m.Update(graphsLoadedMsg{graphs: []graphify.GraphRef{{Label: "payment-portal"}, {Label: "monorepo"}}})
 	model := screen.(Model)
 
-	_, cmd := model.Update(key("enter")) // cursor 0 = payment-portal
+	_, cmd := model.Update(key("enter"))
 	msg := cmd()
 	switchMsg, ok := msg.(tuiapp.SwitchScreenMsg)
 	if !ok || switchMsg.To != tuiapp.ScreenProgress {
@@ -126,7 +126,6 @@ func TestUpdate_PickGraph_BackReturnsToAskYesNo(t *testing.T) {
 	screen, _ := m.Update(graphsLoadedMsg{graphs: []graphify.GraphRef{{Label: "payment-portal"}}})
 	model := screen.(Model)
 
-	// cursor: 0=payment-portal, 1=Back
 	screen, _ = model.Update(key("down"))
 	model = screen.(Model)
 	screen, cmd := model.Update(key("enter"))
@@ -143,7 +142,7 @@ func TestUpdate_PickGraph_CursorWraps(t *testing.T) {
 	m := New(testServices(), testPipeline(), "x")
 	screen, _ := m.Update(graphsLoadedMsg{graphs: []graphify.GraphRef{{Label: "a"}, {Label: "b"}}})
 	model := screen.(Model)
-	screen, _ = model.Update(key("up")) // wraps from 0 to last (2 graphs + Back = 3 rows)
+	screen, _ = model.Update(key("up"))
 	model = screen.(Model)
 	if model.cursor != 2 {
 		t.Fatalf("expected cursor to wrap to 2, got %d", model.cursor)

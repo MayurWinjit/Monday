@@ -1,7 +1,3 @@
-// Package theme defines the catppuccin mocha palette and shared lipgloss
-// styles every screen composes, per architect-plan section 7.2. Colors and
-// common styles are defined exactly once here - screens never build their
-// own lipgloss.NewStyle() chains for the same visual element twice.
 package theme
 
 import "github.com/charmbracelet/lipgloss"
@@ -27,8 +23,6 @@ const (
 	Mantle    = lipgloss.Color("#181825")
 )
 
-// StatusColor maps a session.StepStatus string (or SessionStatus "failed")
-// to the color its badge/row renders in.
 var StatusColor = map[string]lipgloss.Color{
 	"waiting":     Overlay0,
 	"running":     Blue,
@@ -37,9 +31,6 @@ var StatusColor = map[string]lipgloss.Color{
 	"failed":      Red,
 }
 
-// MinWidth/MinHeight are the smallest terminal size every screen renders a
-// real layout for; below this, every screen falls back to a single
-// "terminal too small" message (architect-plan section 10, challenge #11).
 const (
 	MinWidth  = 60
 	MinHeight = 15
@@ -78,14 +69,10 @@ var (
 				BorderForeground(Mauve)
 )
 
-// Centered lays out content in the middle of a width x height box - every
-// screen's top-level layout helper.
 func Centered(width, height int, content string) string {
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
 }
 
-// TooSmall is the fallback view rendered when the terminal is smaller than
-// MinWidth x MinHeight.
 func TooSmall(width, height int) string {
 	msg := ErrorText.Render("Terminal too small") + "\n" + Dim.Render("Please resize to at least 60x15.")
 	if width <= 0 || height <= 0 {

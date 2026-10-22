@@ -19,8 +19,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/qa"
 )
 
-// --- fakes (mirrors internal/domain/session's own test fakes) ---
-
 type fakeSessionBackend struct {
 	sessions     map[string]session.Session
 	histories    map[string]history.History
@@ -132,8 +130,6 @@ func runningSession() session.Session {
 	}
 }
 
-// --- tests ---
-
 func TestView_Creating(t *testing.T) {
 	m := Model{creating: true, spinner: testSpinner()}
 	view := m.View(80, 24)
@@ -194,7 +190,7 @@ func TestUpdate_TickEveryThirdTriggersCrashPoll(t *testing.T) {
 			t.Fatalf("tick %d: expected a plain re-tick, not a batch with a crash poll", i)
 		}
 	}
-	// 3rd tick should batch the re-tick with a crash-poll command
+
 	screen, cmd := m.Update(tickMsg(time.Now()))
 	m = screen.(Model)
 	if m.tickCount != 3 {
@@ -236,8 +232,7 @@ func TestUpdate_NotifyQuestion_OpensQAOverlay(t *testing.T) {
 	}
 
 	m := Model{session: sess, services: services, spinner: testSpinner(), events: make(chan notifyproto.NotifyMessage)}
-	// developer's interactions file name defaults to its agent name per
-	// resolveInteractionsFileNames; set it on the step directly for the test.
+
 	m.session.Steps[1].InteractionsFile = "developer"
 	backend.sessions[sess.ID] = m.session
 
@@ -262,9 +257,7 @@ func TestUpdate_EscClosesQAOverlay(t *testing.T) {
 
 	screen, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	model := screen.(Model)
-	// esc is forwarded into qa.Update, which returns a ClosedMsg-producing
-	// command - Progress only clears m.qa once that message actually
-	// arrives back through its own top-level Update.
+
 	if model.qa == nil {
 		t.Fatalf("expected qa to still be open immediately after esc (closes via the returned command's message)")
 	}
@@ -377,7 +370,6 @@ func TestUpdate_SessionDone_WithGraph_YesFlow(t *testing.T) {
 		t.Fatalf("expected a RequestUpdate command")
 	}
 
-	// simulate the update landing, then confirm with enter
 	screen, _ = model.Update(graphifyUpdateRequestedMsg{})
 	model = screen.(Model)
 	screen, cleanupCmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -428,11 +420,7 @@ func TestUpdate_QQuits(t *testing.T) {
 }
 
 func TestUpdate_QASubmitResultMsg_RoutesIntoOverlayAndClosesOnSuccess(t *testing.T) {
-	// Regression: Progress only forwards tea.KeyMsg directly into
-	// qa.Update, so the overlay's own async submit result (produced by a
-	// tea.Cmd, not a keypress) needs an explicit case in Progress's top
-	// level switch or it is silently dropped and the overlay never closes
-	// even though the agent was actually resumed.
+
 	services, _ := testServices()
 	opened := qa.New(services.Interactions, services.Sessions, "s1", "w1:p2", "developer", "developer", interaction.InteractionFile{
 		Agent:     "developer",

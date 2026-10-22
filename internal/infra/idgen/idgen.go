@@ -1,5 +1,3 @@
-// Package idgen provides the one real IDGenerator implementation domain
-// services use for new session IDs.
 package idgen
 
 import (

@@ -8,13 +8,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/layout"
 )
 
-// Backend, HerdrClient, Clock, and IDGenerator mirror the shapes of the
-// equivalent interfaces in the root domain package (ports.go). Defined
-// locally rather than imported from there to avoid an import cycle - the
-// root domain package already imports this package for Store's
-// session.Session parameters. internal/infra/fsstore.Store,
-// internal/infra/herdr.Client, internal/infra/clock.System, and
-// internal/infra/idgen all satisfy these structurally with no extra glue.
 type Backend interface {
 	CreateSessionDir(id string) error
 	SaveSession(s Session) error

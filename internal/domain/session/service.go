@@ -11,18 +11,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/pipeline"
 )
 
-// Service is the session lifecycle use case from architect-plan section 6:
-// create a session (spawn the pane grid, start every agent idle, prompt
-// only the first), advance it when a step finishes or raises questions,
-// and detect a crashed/closed pane.
-//
-// Every method reloads the authoritative Session from Backend, mutates it,
-// persists it, and returns the fresh copy - the file on disk is the single
-// source of truth, and a caller holding a stale in-memory copy (the TUI's
-// progress screen, or a CLI harness invoked as a separate process) simply
-// replaces it with what each call returns. This is a small, deliberate
-// refinement over section 6's shorthand signatures ("HandleDone(evt) error",
-// "PollForCrashes(tabID) ([]int, error)") - see docs/developer-questions.md.
 type Service struct {
 	store Backend
 	herdr HerdrClient
@@ -34,8 +22,6 @@ func NewService(store Backend, herdr HerdrClient, clock Clock, ids IDGenerator) 
 	return &Service{store: store, herdr: herdr, clock: clock, ids: ids}
 }
 
-// CreateSessionInput is everything Create needs beyond what it resolves
-// itself (working dir, the pane grid, the new session ID).
 type CreateSessionInput struct {
 	Pipeline      pipeline.Pipeline
 	Requirement   string
@@ -44,10 +30,6 @@ type CreateSessionInput struct {
 	GraphifyGraph string
 }
 
-// Create spawns the pipeline's pane grid, starts every agent idle, prompts
-// only the first step, and persists session.json/history.json. See
-// architect-plan section 5.2 for the spawn sequence and section 8.1 for the
-// end-to-end walkthrough this implements.
 func (s *Service) Create(input CreateSessionInput) (Session, error) {
 	if len(input.Pipeline.Agents) == 0 {
 		return Session{}, fmt.Errorf("session: create: pipeline has no agents")
@@ -137,8 +119,6 @@ func (s *Service) resolveWorkingDir(tabID, mondayPaneID string) (string, error) 
 	return "", fmt.Errorf("session: resolve working dir: monday pane %s not found in tab %s", mondayPaneID, tabID)
 }
 
-// realizePaneGrid walks a layout.Plan, resolving each logical pane index to
-// a real herdr pane ID, seeded with workPaneID at logical index 0.
 func (s *Service) realizePaneGrid(workPaneID string, n int) (map[int]string, error) {
 	logicalToPane := map[int]string{0: workPaneID}
 	for _, instr := range layout.Plan(n) {
@@ -155,10 +135,6 @@ func (s *Service) realizePaneGrid(workPaneID string, n int) (map[int]string, err
 	return logicalToPane, nil
 }
 
-// buildSteps assembles the initial Steps slice, all StepWaiting, resolving
-// each step's pane from logicalToPane and its interactions file name via
-// resolveInteractionsFileNames (handles the same agent appearing more than
-// once in one pipeline - see docs/developer-questions.md / challenge #5).
 func buildSteps(agents []string, logicalToPane map[int]string) []PipelineStep {
 	names := resolveInteractionsFileNames(agents)
 	steps := make([]PipelineStep, len(agents))
@@ -188,9 +164,6 @@ func resolveInteractionsFileNames(agents []string) []string {
 	return names
 }
 
-// promptStep sends the fixed-template handoff prompt (architect-plan
-// section 5.2) to the given step's pane, followed by an enter keypress to
-// submit it.
 func (s *Service) promptStep(sess Session, stepIndex int) error {
 	step := sess.Steps[stepIndex]
 	if err := s.herdr.PromptAgent(step.PaneID, buildPrompt(sess, stepIndex)); err != nil {
@@ -233,10 +206,6 @@ func findStepByPane(sess Session, paneID string) (int, bool) {
 	return 0, false
 }
 
-// HandleDone marks the step at msg.PaneID done, captures a best-effort tail
-// of its terminal output into history, and either hands off to the next
-// step (prompting it and flipping it to running) or marks the whole session
-// done if that was the last step.
 func (s *Service) HandleDone(msg notifyproto.NotifyMessage) (Session, error) {
 	sess, err := s.store.LoadSession(msg.SessionID)
 	if err != nil {
@@ -276,11 +245,6 @@ func (s *Service) HandleDone(msg notifyproto.NotifyMessage) (Session, error) {
 	return sess, nil
 }
 
-// appendHistoryTail does a best-effort ReadAgent capture of the finishing
-// step's terminal output into history.json: a ReadAgent failure simply
-// means no tail entry is appended for this step-completion event (the
-// handoff must never block on it), but an actual history.json persistence
-// failure is a real error and is returned.
 func (s *Service) appendHistoryTail(sess Session, stepIdx int, now time.Time) error {
 	hist, err := s.store.LoadHistory(sess.ID)
 	if err != nil {
@@ -300,8 +264,6 @@ func (s *Service) appendHistoryTail(sess Session, stepIdx int, now time.Time) er
 	return s.store.SaveHistory(sess.ID, hist)
 }
 
-// HandleQuestion marks the step at msg.PaneID as needing input and returns
-// its pending interactions file for the TUI to render.
 func (s *Service) HandleQuestion(msg notifyproto.NotifyMessage) (Session, interaction.InteractionFile, error) {
 	sess, err := s.store.LoadSession(msg.SessionID)
 	if err != nil {
@@ -327,14 +289,6 @@ func (s *Service) HandleQuestion(msg notifyproto.NotifyMessage) (Session, intera
 	return sess, file, nil
 }
 
-// ResumeStep flips a needs_input step back to running and sends it
-// resumePrompt (interaction.ResumePrompt's fixed template) followed by an
-// enter keypress. It is the herdr side-effect + persistence half of the
-// Q&A resume flow described in architect-plan section 6/7.3 - the other
-// half, merging submitted answers into the interactions file itself, is
-// interaction.Service.SubmitAnswers. Keeping the herdr call and the session
-// mutation here (rather than in the TUI's Q&A screen) preserves "one code
-// path for every mutation" from architect-plan section 1.
 func (s *Service) ResumeStep(sessionID, paneID, resumePrompt string) (Session, error) {
 	sess, err := s.store.LoadSession(sessionID)
 	if err != nil {
@@ -365,11 +319,6 @@ func (s *Service) ResumeStep(sessionID, paneID, resumePrompt string) (Session, e
 	return sess, nil
 }
 
-// PollForCrashes compares every step currently running or needing input
-// against a live herdr pane list; any step whose pane has disappeared is
-// flipped to failed, the whole session is marked failed (per analyst
-// resolution #11 - no further steps are activated past a crash), and the
-// changed step indices are returned so the caller can highlight them.
 func (s *Service) PollForCrashes(sessionID string) (Session, []int, error) {
 	sess, err := s.store.LoadSession(sessionID)
 	if err != nil {
@@ -414,25 +363,6 @@ func (s *Service) PollForCrashes(sessionID string) (Session, []int, error) {
 	return sess, changed, nil
 }
 
-// Terminate ends a session that toolcheck found stuck in SessionRunning -
-// typically a stale "running" status left behind by a Monday process that
-// exited without updating it (crash, kill -9, force-quit terminal, etc.;
-// see challenge #8). It is the user's escape hatch, offered on the Launch
-// screen, from hand-editing session.json to get past that.
-//
-// Every pane the session ever spawned (deduplicated - the work area pane
-// and step 0's pane are usually the same ID) is closed on a best-effort
-// basis: a pane that is already gone, or belongs to a herdr
-// tab/workspace that no longer exists, must never block termination.
-// Every non-terminal step is then flipped to failed and the session itself
-// is marked SessionFailed - the same status PollForCrashes uses for an
-// abandoned session, since from this process's point of view the two are
-// indistinguishable: pipeline work that will never complete.
-//
-// Terminate deliberately never touches Session.MondayPaneID: that is the
-// pane the stale Monday process itself ran in, not one of its pipeline's
-// panes, and closing it could reach into a terminal tab the user is
-// actively using for something else right now.
 func (s *Service) Terminate(sessionID string) (Session, error) {
 	sess, err := s.store.LoadSession(sessionID)
 	if err != nil {

@@ -1,9 +1,3 @@
-// Package launch is the Launch screen (architect-plan section 7.3 and
-// REQUIREMENT.md visual requirement 1): the MONDAY ASCII banner, a list of
-// saved pipelines when any exist, and a "Create an orchestration" button
-// that is always the last row. The whole screen is one list - up/down
-// cycles through saved pipelines then the button, enter activates
-// whichever row is highlighted.
 package launch
 
 import (
@@ -43,11 +37,6 @@ type Model struct {
 	cursor    int
 	err       string
 
-	// alreadyRunningID is non-empty when toolcheck found another Monday
-	// session still marked "running" (challenge #8) - typically a stale
-	// status left behind by a Monday process that exited without updating
-	// it. While set (and not yet terminated), row 0 is a "Terminate
-	// session" button ahead of the saved pipelines and the create button.
 	alreadyRunningID string
 	terminating      bool
 	terminated       bool
@@ -70,14 +59,6 @@ func loadPipelines(services *app.Services) tea.Cmd {
 	}
 }
 
-// agentsLoadedMsg carries the discovered global agent catalog back after
-// either list row is activated. forPipeline is non-nil only for the
-// saved-pipeline path, where it is validated against the catalog before
-// continuing - if an agent file referenced by a saved pipeline was deleted
-// since it was saved, this surfaces that clearly instead of failing deep
-// inside session creation. Agent discovery warnings (a malformed file
-// skipped) are non-fatal and not surfaced here - the agent picker screen
-// shows the catalog it actually got.
 type agentsLoadedMsg struct {
 	agents      []agent.Agent
 	forPipeline *pipeline.Pipeline
@@ -94,15 +75,10 @@ func (m Model) Init() tea.Cmd {
 	return loadPipelines(m.services)
 }
 
-// showTerminateRow reports whether row 0 is currently the "Terminate
-// session" button - true exactly while another session was detected
-// running and hasn't been successfully terminated yet.
 func (m Model) showTerminateRow() bool {
 	return m.alreadyRunningID != "" && !m.terminated
 }
 
-// rowOffset is 1 while the terminate row occupies row 0, shifting every
-// pipeline row and the create button down by one; 0 otherwise.
 func (m Model) rowOffset() int {
 	if m.showTerminateRow() {
 		return 1
@@ -111,7 +87,7 @@ func (m Model) rowOffset() int {
 }
 
 func (m Model) rowCount() int {
-	return m.rowOffset() + len(m.pipelines) + 1 // +1 for "Create an orchestration"
+	return m.rowOffset() + len(m.pipelines) + 1
 }
 
 type terminateResultMsg struct {

@@ -31,7 +31,7 @@ func TestChunk(t *testing.T) {
 func TestPlan_DocumentedExamples(t *testing.T) {
 	tests := []struct {
 		n        int
-		wantRows []int // row sizes, derived independently via a simulated walk
+		wantRows []int
 	}{
 		{3, []int{3}},
 		{4, []int{3, 1}},
@@ -83,7 +83,6 @@ func TestPlan_Invariants(t *testing.T) {
 			introduced[instr.NewLogical] = true
 		}
 
-		// every logical index from 0..n-1 must be introduced exactly once
 		if len(introduced) != n {
 			t.Fatalf("Plan(%d): expected %d distinct logical panes, got %d", n, n, len(introduced))
 		}
@@ -99,9 +98,6 @@ func TestPlan_NoPanesForZeroOrOne(t *testing.T) {
 	}
 }
 
-// simulateRows replays a Plan's instructions to reconstruct which logical
-// panes ended up in the same row, using the same Down-starts-a-new-row /
-// Right-extends-current-row convention Plan emits.
 func simulateRows(n int, instructions []SplitInstruction) [][]int {
 	rows := [][]int{{0}}
 	rowOf := map[int]int{0: 0}

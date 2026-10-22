@@ -1,6 +1,3 @@
-// Command monday is the entry point for the Monday multi-agent orchestration
-// tool. It dispatches to either the full-screen TUI (`monday`) or the
-// `monday notify` subcommand used by pipeline agents to signal Monday.
 package main
 
 import (
@@ -31,11 +28,6 @@ func main() {
 	os.Exit(runTUI())
 }
 
-// runTUI wires internal/app.Services and launches the full-screen TUI. The
-// screen factory grows its switch as each real screen is built (build step
-// 12+), without ever needing internal/tui/app itself to import a concrete
-// screen package (see internal/tui/app/model.go's package comment) - only
-// this composition root does.
 func runTUI() int {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -49,9 +41,6 @@ func runTUI() int {
 		return 1
 	}
 
-	// Installed once per launch, before the TUI starts, so the skill file
-	// is always current even if the user never completes a pipeline. A
-	// failure here is not fatal to the TUI itself - just surfaced.
 	if err := services.SkillWriter.Install(); err != nil {
 		fmt.Fprintln(os.Stderr, "monday: could not install the monday Claude skill:", err)
 	}
@@ -91,12 +80,6 @@ func runTUI() int {
 	return 0
 }
 
-// runNotify implements `monday notify --session <id> --pane <pane_id> --type QUES|DONE`
-// (REQUIREMENT.md step 17, architect-plan section 5.3): a thin CLI entry
-// point that dials the session's Unix socket and sends one NotifyMessage.
-// It takes the socket path purely from --session, never from an inherited
-// environment variable, since it may be invoked by an agent whose shell has
-// a completely different working directory than Monday's own process.
 func runNotify(args []string) int {
 	fs := flag.NewFlagSet("monday notify", flag.ContinueOnError)
 	sessionID := fs.String("session", "", "session UUID (required)")

@@ -106,7 +106,7 @@ func TestUpdate_CtrlSSubmitsFromAnywhere(t *testing.T) {
 func TestUpdate_EnterOnButtonSubmits(t *testing.T) {
 	m := New(pipeline.Pipeline{Agents: []string{"architect"}})
 	m = typeText(m, "do the thing")
-	screen, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab}) // focus the button
+	screen, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = screen.(Model)
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})

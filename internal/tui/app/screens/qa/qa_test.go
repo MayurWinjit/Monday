@@ -87,7 +87,7 @@ func TestView_ShowsQuestionProgress(t *testing.T) {
 
 func TestUpdate_SelectingOptionAutoAdvances(t *testing.T) {
 	m := New(&fakeInteractions{}, &fakeSessions{}, "s1", "w1:p2", "developer", "developer", twoQuestionFile())
-	m, _ = m.Update(key("enter")) // selects optCursor 0 = "Light" for q1
+	m, _ = m.Update(key("enter"))
 	if m.answers["q1"] != "Light" {
 		t.Fatalf("expected q1 answered 'Light', got %+v", m.answers)
 	}
@@ -98,8 +98,8 @@ func TestUpdate_SelectingOptionAutoAdvances(t *testing.T) {
 
 func TestUpdate_LeftRightNavigatesQuestionsWithoutLosingAnswers(t *testing.T) {
 	m := New(&fakeInteractions{}, &fakeSessions{}, "s1", "w1:p2", "developer", "developer", twoQuestionFile())
-	m, _ = m.Update(key("enter")) // answer q1 -> auto-advance to q2
-	m, _ = m.Update(key("left"))  // back to q1
+	m, _ = m.Update(key("enter"))
+	m, _ = m.Update(key("left"))
 	if m.cursor != 0 {
 		t.Fatalf("expected cursor back at q1, got %d", m.cursor)
 	}
@@ -110,8 +110,8 @@ func TestUpdate_LeftRightNavigatesQuestionsWithoutLosingAnswers(t *testing.T) {
 
 func TestUpdate_OtherOptionOpensTextInput(t *testing.T) {
 	m := New(&fakeInteractions{}, &fakeSessions{}, "s1", "w1:p2", "developer", "developer", twoQuestionFile())
-	m, _ = m.Update(key("down")) // optCursor -> 1 (Thorough)
-	m, _ = m.Update(key("down")) // optCursor -> 2 (Other)
+	m, _ = m.Update(key("down"))
+	m, _ = m.Update(key("down"))
 	m, _ = m.Update(key("enter"))
 	if !m.typingOther {
 		t.Fatalf("expected enter on Other to start typing")
@@ -120,7 +120,7 @@ func TestUpdate_OtherOptionOpensTextInput(t *testing.T) {
 	for _, r := range "custom answer" {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
-	m, _ = m.Update(key("enter")) // commit
+	m, _ = m.Update(key("enter"))
 	if m.typingOther {
 		t.Fatalf("expected typingOther to close after commit")
 	}
@@ -132,9 +132,9 @@ func TestUpdate_OtherOptionOpensTextInput(t *testing.T) {
 func TestUpdate_EmptyOtherTextDoesNotAnswer(t *testing.T) {
 	m := New(&fakeInteractions{}, &fakeSessions{}, "s1", "w1:p2", "developer", "developer", twoQuestionFile())
 	m, _ = m.Update(key("down"))
-	m, _ = m.Update(key("down")) // Other row
+	m, _ = m.Update(key("down"))
 	m, _ = m.Update(key("enter"))
-	m, _ = m.Update(key("enter")) // commit with empty text
+	m, _ = m.Update(key("enter"))
 	if _, answered := m.answers["q1"]; answered {
 		t.Fatalf("expected no answer recorded for empty Other text")
 	}
@@ -147,8 +147,8 @@ func TestUpdate_TabOnlyFocusesSubmitWhenAllAnswered(t *testing.T) {
 		t.Fatalf("expected tab to do nothing until all questions are answered")
 	}
 
-	m, _ = m.Update(key("enter")) // answer q1
-	m, _ = m.Update(key("enter")) // answer q2
+	m, _ = m.Update(key("enter"))
+	m, _ = m.Update(key("enter"))
 	m, _ = m.Update(key("tab"))
 	if !m.focusOnSubmit {
 		t.Fatalf("expected tab to focus submit once all answered")
@@ -160,9 +160,9 @@ func TestUpdate_SubmitCallsInteractionsAndResumesStep(t *testing.T) {
 	sessions := &fakeSessions{result: session.Session{ID: "s1"}}
 	m := New(interactions, sessions, "s1", "w1:p2", "developer", "developer", twoQuestionFile())
 
-	m, _ = m.Update(key("enter")) // q1
-	m, _ = m.Update(key("enter")) // q2
-	m, _ = m.Update(key("tab"))   // focus submit
+	m, _ = m.Update(key("enter"))
+	m, _ = m.Update(key("enter"))
+	m, _ = m.Update(key("tab"))
 
 	_, cmd := m.Update(key("enter"))
 	if cmd == nil {

@@ -48,7 +48,7 @@ func TestView_ListsSequenceInOrder(t *testing.T) {
 
 func TestUpdate_CursorDoesNotWrap(t *testing.T) {
 	m := New(nil, testAvailable(), []string{"architect", "developer"})
-	screen, _ := m.Update(key("up")) // already at 0, must stay at 0 (no wrap, unlike other screens)
+	screen, _ := m.Update(key("up"))
 	model := screen.(Model)
 	if model.cursor != 0 {
 		t.Fatalf("expected cursor to stay at 0, got %d", model.cursor)
@@ -57,7 +57,7 @@ func TestUpdate_CursorDoesNotWrap(t *testing.T) {
 
 func TestUpdate_ShiftUpSwapsAndFollowsCursor(t *testing.T) {
 	m := New(nil, testAvailable(), []string{"architect", "developer", "reviewer"})
-	screen, _ := m.Update(key("down")) // cursor -> 1 (developer)
+	screen, _ := m.Update(key("down"))
 	model := screen.(Model)
 	screen, _ = model.Update(key("shift+up"))
 	model = screen.(Model)
@@ -75,7 +75,7 @@ func TestUpdate_ShiftUpSwapsAndFollowsCursor(t *testing.T) {
 
 func TestUpdate_AddAgainAppendsHighlightedAgent(t *testing.T) {
 	m := New(nil, testAvailable(), []string{"architect", "developer"})
-	screen, _ := m.Update(key("a")) // cursor 0 = architect
+	screen, _ := m.Update(key("a"))
 	model := screen.(Model)
 
 	want := []string{"architect", "developer", "architect"}
@@ -91,7 +91,7 @@ func TestUpdate_AddAgainAppendsHighlightedAgent(t *testing.T) {
 
 func TestUpdate_RemoveDeletesHighlightedEntry(t *testing.T) {
 	m := New(nil, testAvailable(), []string{"architect", "developer", "reviewer"})
-	screen, _ := m.Update(key("down")) // cursor -> 1 (developer)
+	screen, _ := m.Update(key("down"))
 	model := screen.(Model)
 	screen, _ = model.Update(key("d"))
 	model = screen.(Model)
@@ -213,11 +213,6 @@ func TestUpdate_EscClosesSavePromptWithoutSaving(t *testing.T) {
 	}
 }
 
-// --- fakes ---
-
-// fakeBackend implements pipeline.Backend so pipeline.Store's real
-// validation/duplicate-check/save logic runs in these tests, exactly as it
-// does in internal/domain/pipeline's own tests.
 type fakeBackend struct {
 	pipelines map[string]pipeline.Pipeline
 }

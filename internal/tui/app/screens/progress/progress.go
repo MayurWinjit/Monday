@@ -1,10 +1,3 @@
-// Package progress is the Stepped Progress screen (architect-plan section
-// 7.3) - the primary "idiot friendly" screen: one row per pipeline step
-// with a live status badge and elapsed timer, a notify-driven handoff
-// between steps, crash detection every third tick, an embedded Q&A
-// overlay, and the post-pipeline graphify update/cleanup confirmation.
-// The Q&A view is not a separate routable screen - it is an overlay owned
-// by this screen (m.qa), per architect-plan section 7.1.
 package progress
 
 import (
@@ -44,10 +37,8 @@ type Model struct {
 	spinner   spinner.Model
 	handleErr string
 
-	qa *qa.Model // nil when no overlay is open
+	qa *qa.Model
 
-	// Post-completion graphify confirm flow (architect-plan section 8.4) -
-	// never automatic, always a manual key press either way.
 	graphifyAsked     bool
 	graphifyRequested bool
 	graphifyFinalized bool
@@ -74,8 +65,6 @@ func (m Model) Init() tea.Cmd {
 		tickCmd(),
 	)
 }
-
-// --- commands & messages ---
 
 type sessionCreatedMsg struct {
 	session session.Session
@@ -110,8 +99,7 @@ func createSessionCmd(services *app.Services, p pipeline.Pipeline, requirement, 
 				sess.GraphifySymlink = symlinkPath
 				_ = services.Store.SaveSession(sess)
 			}
-			// A failed injection is not fatal to the pipeline itself - the
-			// pipeline still runs, just without the graph available to it.
+
 		}
 
 		server := socket.NewServer(services.Store.Root())
@@ -185,8 +173,6 @@ func openQACmd(services *app.Services, sessionID string, step session.PipelineSt
 	}
 }
 
-// --- update ---
-
 func (m Model) currentNeedsInputStep() (session.PipelineStep, bool) {
 	for _, step := range m.session.Steps {
 		if step.Status == session.StepNeedsInput {
@@ -243,12 +229,7 @@ func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
 		return m, nil
 
 	case qa.SubmitResultMsg:
-		// The one non-key message the open overlay produces (its own
-		// submit round trip to interaction.Service/session.Service) - this
-		// has to be routed back into qa.Update explicitly, since Progress
-		// only forwards key messages to it directly (architect-plan section
-		// 7.3: "every key is forwarded to m.qa.Update first"). qa.Update
-		// turns this into SubmittedMsg below.
+
 		if m.qa != nil {
 			updated, cmd := m.qa.Update(msg)
 			m.qa = &updated
@@ -365,8 +346,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tuiapp.Screen, tea.Cmd) {
 	}
 	return m, nil
 }
-
-// --- view ---
 
 func (m Model) View(width, height int) string {
 	if m.createErr != "" {

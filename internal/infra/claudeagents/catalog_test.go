@@ -84,7 +84,7 @@ func TestDiscover_NoProjectAgentsDirIsNotAWarning(t *testing.T) {
 		"---\nname: architect\n---\n")
 
 	c := New(home)
-	agents, err := c.Discover(t.TempDir()) // project dir exists but has no .claude/agents
+	agents, err := c.Discover(t.TempDir())
 	if err != nil {
 		t.Fatalf("expected no warnings for a missing project agents dir, got %v", err)
 	}
@@ -180,7 +180,7 @@ func TestDiscover_ResultOrderIsStableByFilename(t *testing.T) {
 	}
 	got := []string{agents[0].Name, agents[1].Name}
 	want := []string{"afirst", "zlast"}
-	sort.Strings(want) // os.ReadDir is filename-sorted; a-first.md < z-last.md
+	sort.Strings(want)
 	if got[0] != "afirst" || got[1] != "zlast" {
 		t.Fatalf("expected filename-sorted order, got %v", got)
 	}

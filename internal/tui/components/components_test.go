@@ -13,7 +13,7 @@ func TestFormatElapsed(t *testing.T) {
 		{0, "00:00"},
 		{5 * time.Second, "00:05"},
 		{65 * time.Second, "01:05"},
-		{90*time.Second + 400*time.Millisecond, "01:30"}, // truncated, not rounded
+		{90*time.Second + 400*time.Millisecond, "01:30"},
 		{3661 * time.Second, "61:01"},
 	}
 	for _, tt := range tests {

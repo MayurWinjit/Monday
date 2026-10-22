@@ -8,10 +8,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/layout"
 )
 
-// fakeExecutor is a scripted Executor for unit tests that must not depend on
-// the real herdr binary. Each call consumes the next scripted response
-// regardless of args, which is enough for the sequencing this package needs
-// to test (e.g. SplitPane's before/after diff fallback).
 type fakeExecutor struct {
 	calls     [][]string
 	responses []fakeResponse
@@ -85,8 +81,8 @@ func TestCurrentPaneID_AmbiguousOrNone(t *testing.T) {
 
 func TestSplitPane_DirectParse(t *testing.T) {
 	ex := &fakeExecutor{responses: []fakeResponse{
-		{stdout: `{"id":"x","result":{"panes":[{"pane_id":"w1:p1"}]}}`},                 // before snapshot
-		{stdout: `{"id":"x","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}`}, // split
+		{stdout: `{"id":"x","result":{"panes":[{"pane_id":"w1:p1"}]}}`},
+		{stdout: `{"id":"x","result":{"pane":{"pane_id":"w1:p2"},"type":"pane_info"}}`},
 	}}
 	c := NewWithExecutor(ex)
 	newID, err := c.SplitPane("w1:p1", layout.DirectionRight)
@@ -100,9 +96,9 @@ func TestSplitPane_DirectParse(t *testing.T) {
 
 func TestSplitPane_DiffFallbackWhenPaneIDMissing(t *testing.T) {
 	ex := &fakeExecutor{responses: []fakeResponse{
-		{stdout: `{"id":"x","result":{"panes":[{"pane_id":"w1:p1"}]}}`},                     // before snapshot
-		{stdout: `{"id":"x","result":{"pane":{},"type":"pane_info"}}`},                      // split, no pane_id in result
-		{stdout: `{"id":"x","result":{"panes":[{"pane_id":"w1:p1"},{"pane_id":"w1:p2"}]}}`}, // after snapshot
+		{stdout: `{"id":"x","result":{"panes":[{"pane_id":"w1:p1"}]}}`},
+		{stdout: `{"id":"x","result":{"pane":{},"type":"pane_info"}}`},
+		{stdout: `{"id":"x","result":{"panes":[{"pane_id":"w1:p1"},{"pane_id":"w1:p2"}]}}`},
 	}}
 	c := NewWithExecutor(ex)
 	newID, err := c.SplitPane("w1:p1", layout.DirectionRight)
@@ -117,7 +113,7 @@ func TestSplitPane_DiffFallbackWhenPaneIDMissing(t *testing.T) {
 func TestStartAgent_PassesTrailingAgentFlag(t *testing.T) {
 	ex := &fakeExecutor{responses: []fakeResponse{
 		{stdout: `{"id":"x","result":{"agent":{"pane_id":"w1:p2"},"argv":["claude","--agent","architect"]}}`},
-		{stdout: "", exitCode: 0}, // agent wait --until idle
+		{stdout: "", exitCode: 0},
 	}}
 	c := NewWithExecutor(ex)
 	if err := c.StartAgent("w1:p2", "architect"); err != nil {
@@ -155,7 +151,7 @@ func TestStartAgent_WaitFailureIsReported(t *testing.T) {
 func TestStartAgent_FallsBackToPaneRun(t *testing.T) {
 	ex := &fakeExecutor{responses: []fakeResponse{
 		{stderr: `{"id":"x","error":{"code":"unknown_command","message":"agent start unsupported"}}`, exitCode: 1},
-		{stdout: "", exitCode: 0}, // pane run prints no JSON envelope on success
+		{stdout: "", exitCode: 0},
 	}}
 	c := NewWithExecutor(ex)
 	if err := c.StartAgent("w1:p2", "architect"); err != nil {
@@ -241,9 +237,9 @@ func TestListPanes_FiltersByTabAndPassesWorkspace(t *testing.T) {
 func TestPromptAgent_RetriesOnTransientAgentNotFound(t *testing.T) {
 	notFound := `{"id":"x","error":{"code":"agent_not_found","message":"agent target w1:p2 not found"}}`
 	ex := &fakeExecutor{responses: []fakeResponse{
-		{stderr: notFound, exitCode: 1},              // agent prompt: fails
-		{stdout: "", exitCode: 0},                    // agent wait
-		{stdout: `{"id":"x","result":{"agent":{}}}`}, // agent prompt: succeeds
+		{stderr: notFound, exitCode: 1},
+		{stdout: "", exitCode: 0},
+		{stdout: `{"id":"x","result":{"agent":{}}}`},
 	}}
 	c := NewWithExecutor(ex)
 	if err := c.PromptAgent("w1:p2", "hello"); err != nil {
@@ -258,8 +254,8 @@ func TestPromptAgent_GivesUpAfterMaxAttempts(t *testing.T) {
 	notFound := `{"id":"x","error":{"code":"agent_not_found","message":"agent target w1:p2 not found"}}`
 	responses := []fakeResponse{}
 	for i := 0; i < 5; i++ {
-		responses = append(responses, fakeResponse{stderr: notFound, exitCode: 1}) // agent prompt
-		responses = append(responses, fakeResponse{stdout: "", exitCode: 0})       // agent wait
+		responses = append(responses, fakeResponse{stderr: notFound, exitCode: 1})
+		responses = append(responses, fakeResponse{stdout: "", exitCode: 0})
 	}
 	ex := &fakeExecutor{responses: responses}
 	c := NewWithExecutor(ex)

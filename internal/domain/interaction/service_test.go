@@ -74,7 +74,6 @@ func TestService_SubmitAnswers_MergesByQuestionID(t *testing.T) {
 		t.Fatalf("expected q2 answered, got %+v", updated.Questions[1])
 	}
 
-	// persisted
 	persisted := backend.files["s1/developer"]
 	if persisted.Questions[0].Answer == nil || *persisted.Questions[0].Answer != "A" {
 		t.Fatalf("expected persisted file to reflect the answer, got %+v", persisted)

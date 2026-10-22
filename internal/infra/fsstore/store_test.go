@@ -35,7 +35,6 @@ func TestEnsureLayout(t *testing.T) {
 		}
 	}
 
-	// idempotent re-run
 	if err := s.EnsureLayout(); err != nil {
 		t.Fatalf("EnsureLayout (second run): %v", err)
 	}
@@ -88,7 +87,6 @@ func TestPipelineSaveLoadAndDuplicateName(t *testing.T) {
 		t.Fatalf("expected CreatedAt %v, got %v", now, loaded[0].CreatedAt)
 	}
 
-	// Overwriting with the same name must not corrupt the file (write-temp-then-rename).
 	p.Agents = append(p.Agents, "tester")
 	if err := s.SavePipeline(p); err != nil {
 		t.Fatalf("SavePipeline (update): %v", err)
@@ -193,7 +191,6 @@ func TestSessionHistoryInteractionsRoundTrip(t *testing.T) {
 		t.Fatalf("expected nil answer for unanswered question, got %v", *loadedFile.Questions[1].Answer)
 	}
 
-	// interactions file lives under the session's interactions/ dir as <file>.json
 	expectedPath := filepath.Join(s.sessionDir(sessionID), "interactions", "developer.json")
 	if _, err := os.Stat(expectedPath); err != nil {
 		t.Fatalf("expected interactions file at %s: %v", expectedPath, err)
@@ -220,7 +217,6 @@ func TestWriteDoc(t *testing.T) {
 		t.Fatalf("unexpected doc content: %q", data)
 	}
 
-	// nested relative path should have its parent directories created
 	if err := s.WriteDoc(sessionID, filepath.Join("reports", "plan.md"), []byte("plan")); err != nil {
 		t.Fatalf("WriteDoc (nested): %v", err)
 	}
@@ -250,7 +246,7 @@ func TestListSavedGraphs(t *testing.T) {
 			t.Fatalf("mkdir graph fixture: %v", err)
 		}
 	}
-	// a stray file (not a directory) under graphs/ must be ignored
+
 	if err := os.WriteFile(filepath.Join(home, ".monday", "graphs", "README.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatalf("write stray file: %v", err)
 	}

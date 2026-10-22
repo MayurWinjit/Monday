@@ -1,6 +1,3 @@
-// Package requirement is the Requirement Entry screen (architect-plan
-// section 7.3): a breadcrumb of the resolved pipeline above a large
-// bordered textarea, with a Submit button below it.
 package requirement
 
 import (

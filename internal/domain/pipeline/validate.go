@@ -7,13 +7,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/agent"
 )
 
-// Validate checks that p is well-formed: a non-empty, trimmed name, at
-// least one agent step, and every agent name resolving against catalog -
-// the currently discovered agent catalog. If an agent file was deleted
-// since the pipeline was saved, this surfaces a clear "unknown agent: X"
-// error rather than silently dropping the step. Uniqueness against other
-// saved pipeline names is checked by Store, not here, since that needs a
-// directory listing.
 func Validate(p Pipeline, catalog []agent.Agent) error {
 	if strings.TrimSpace(p.Name) == "" {
 		return fmt.Errorf("pipeline name must not be empty")

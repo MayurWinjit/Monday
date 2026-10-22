@@ -12,8 +12,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/pipeline"
 )
 
-// --- fakes ---
-
 type fakeBackend struct {
 	sessions     map[string]Session
 	histories    map[string]history.History
@@ -81,15 +79,15 @@ func (f *fakeBackend) DocsDir(sessionID string) string { return "/fake/" + sessi
 
 type fakeHerdr struct {
 	panes          []layout.PaneInfo
-	splitSeq       []string // pane IDs returned by successive SplitPane calls, in order
-	splitCalls     []string // "fromPane:dir" for each SplitPane call
-	startCalls     []string // "pane:agent"
-	promptCalls    []string // "pane:prompt"
-	sendKeysCalls  []string // "pane:keys"
+	splitSeq       []string
+	splitCalls     []string
+	startCalls     []string
+	promptCalls    []string
+	sendKeysCalls  []string
 	readAgentFunc  func(paneID string) (string, error)
 	explainFunc    func(paneID string) (layout.AgentExplain, error)
 	nextSplitIndex int
-	closeCalls     []string // pane IDs passed to ClosePane, in order
+	closeCalls     []string
 	closeErr       error
 }
 
@@ -156,8 +154,6 @@ func (s *sequentialIDs) NewID() string {
 	return id
 }
 
-// --- test helpers ---
-
 func testPipeline(agents ...string) pipeline.Pipeline {
 	return pipeline.Pipeline{Name: "test-pipeline", Agents: agents}
 }
@@ -176,13 +172,11 @@ func newTestService(herdr *fakeHerdr, backend *fakeBackend, now time.Time, ids .
 	return NewService(backend, herdr, clock, idgen), backend, herdr
 }
 
-// --- Create ---
-
 func TestCreate_ThreeAgentHappyPath(t *testing.T) {
 	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
 	herdr := &fakeHerdr{
 		panes:    []layout.PaneInfo{{PaneID: mondayPane, TabID: tabID, CWD: "/work/project"}},
-		splitSeq: []string{"w1:p2" /* work area */, "w1:p3" /* right split 1 */, "w1:p4" /* right split 2 */},
+		splitSeq: []string{"w1:p2", "w1:p3", "w1:p4"},
 	}
 	svc, backend, _ := newTestService(herdr, nil, now, "session-1")
 
@@ -228,16 +222,14 @@ func TestCreate_ThreeAgentHappyPath(t *testing.T) {
 		t.Fatalf("expected session running, got %s", sess.Status)
 	}
 
-	// every agent started idle
 	if len(herdr.startCalls) != 3 {
 		t.Fatalf("expected 3 StartAgent calls, got %d: %v", len(herdr.startCalls), herdr.startCalls)
 	}
-	// only the first step was prompted
+
 	if len(herdr.promptCalls) != 1 || len(herdr.sendKeysCalls) != 1 {
 		t.Fatalf("expected exactly 1 prompt + 1 send-keys call, got %d/%d", len(herdr.promptCalls), len(herdr.sendKeysCalls))
 	}
 
-	// persisted
 	if _, ok := backend.sessions["session-1"]; !ok {
 		t.Fatalf("expected session to be persisted")
 	}
@@ -323,8 +315,6 @@ func TestResolveInteractionsFileNames(t *testing.T) {
 		}
 	}
 }
-
-// --- HandleDone ---
 
 func baseSessionForHandlers() Session {
 	return Session{
@@ -447,8 +437,6 @@ func TestHandleDone_ReadAgentFailureDoesNotBlockHandoff(t *testing.T) {
 	}
 }
 
-// --- HandleQuestion ---
-
 func TestHandleQuestion_MarksNeedsInputAndReturnsFile(t *testing.T) {
 	backend := newFakeBackend()
 	sess := baseSessionForHandlers()
@@ -491,8 +479,6 @@ func TestHandleQuestion_UnknownPaneErrors(t *testing.T) {
 	}
 }
 
-// --- ResumeStep ---
-
 func TestResumeStep_FlipsToRunningAndPrompts(t *testing.T) {
 	backend := newFakeBackend()
 	sess := baseSessionForHandlers()
@@ -519,7 +505,7 @@ func TestResumeStep_FlipsToRunningAndPrompts(t *testing.T) {
 
 func TestResumeStep_RejectsStepNotNeedsInput(t *testing.T) {
 	backend := newFakeBackend()
-	backend.sessions["s1"] = baseSessionForHandlers() // step 0 is "running", not needs_input
+	backend.sessions["s1"] = baseSessionForHandlers()
 	svc, _, _ := newTestService(&fakeHerdr{}, backend, time.Now())
 
 	if _, err := svc.ResumeStep("s1", "w1:p2", "resume"); err == nil {
@@ -536,8 +522,6 @@ func TestResumeStep_UnknownPaneErrors(t *testing.T) {
 		t.Fatalf("expected an error for an unknown pane")
 	}
 }
-
-// --- PollForCrashes ---
 
 func TestPollForCrashes_NoChangeWhenAllPanesPresent(t *testing.T) {
 	backend := newFakeBackend()
@@ -562,8 +546,7 @@ func TestPollForCrashes_NoChangeWhenAllPanesPresent(t *testing.T) {
 func TestPollForCrashes_WaitingStepMissingPaneIsIgnored(t *testing.T) {
 	backend := newFakeBackend()
 	backend.sessions["s1"] = baseSessionForHandlers()
-	// developer's pane (w1:p3) is gone, but developer is still "waiting"
-	// (never started) - only running/needs_input steps are polled.
+
 	herdr := &fakeHerdr{panes: []layout.PaneInfo{{PaneID: "w1:p2"}, {PaneID: "w1:p4"}}}
 	svc, backend, _ := newTestService(herdr, backend, time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC))
 
@@ -572,9 +555,7 @@ func TestPollForCrashes_WaitingStepMissingPaneIsIgnored(t *testing.T) {
 		t.Fatalf("PollForCrashes: %v", err)
 	}
 	if len(changed) != 0 {
-		// architect is "running" and present, developer is "waiting" (not
-		// polled - it never started), so nothing should have failed here;
-		// this test's base session has developer waiting, not running.
+
 		t.Fatalf("expected no changed steps since only a 'waiting' step's pane is missing, got %v", changed)
 	}
 	_ = updated
@@ -585,10 +566,10 @@ func TestPollForCrashes_RunningStepPaneGoneFailsSession(t *testing.T) {
 	backend := newFakeBackend()
 	sess := baseSessionForHandlers()
 	sess.Steps[0].Status = StepDone
-	sess.Steps[1].Status = StepRunning // developer now running, pane w1:p3
+	sess.Steps[1].Status = StepRunning
 	backend.sessions["s1"] = sess
 
-	herdr := &fakeHerdr{panes: []layout.PaneInfo{{PaneID: "w1:p2"}, {PaneID: "w1:p4"}}} // w1:p3 missing
+	herdr := &fakeHerdr{panes: []layout.PaneInfo{{PaneID: "w1:p2"}, {PaneID: "w1:p4"}}}
 	svc, backend, _ := newTestService(herdr, backend, time.Now())
 
 	updated, changed, err := svc.PollForCrashes("s1")
@@ -615,7 +596,7 @@ func TestPollForCrashes_AlreadyFailedSessionIsNoOp(t *testing.T) {
 	sess.Status = SessionFailed
 	backend.sessions["s1"] = sess
 
-	herdr := &fakeHerdr{panes: nil} // every pane "missing" - must not matter, session already failed
+	herdr := &fakeHerdr{panes: nil}
 	svc, _, _ := newTestService(herdr, backend, time.Now())
 
 	_, changed, err := svc.PollForCrashes("s1")
@@ -627,12 +608,10 @@ func TestPollForCrashes_AlreadyFailedSessionIsNoOp(t *testing.T) {
 	}
 }
 
-// --- Terminate ---
-
 func TestTerminate_ClosesEveryStepPaneAndMarksFailed(t *testing.T) {
 	backend := newFakeBackend()
 	sess := baseSessionForHandlers()
-	sess.Steps[0].Status = StepDone // already finished - still gets its pane closed, but its status is left alone
+	sess.Steps[0].Status = StepDone
 	backend.sessions[sess.ID] = sess
 
 	herdr := &fakeHerdr{}
@@ -693,7 +672,7 @@ func TestTerminate_NeverClosesTheMondayPane(t *testing.T) {
 func TestTerminate_DedupesWorkAreaPaneWithStepZeroPane(t *testing.T) {
 	backend := newFakeBackend()
 	sess := baseSessionForHandlers()
-	sess.WorkAreaPaneID = sess.Steps[0].PaneID // same pane, as Create always sets it
+	sess.WorkAreaPaneID = sess.Steps[0].PaneID
 	backend.sessions[sess.ID] = sess
 
 	herdr := &fakeHerdr{}

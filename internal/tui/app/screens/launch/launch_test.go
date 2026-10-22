@@ -29,10 +29,6 @@ func testServices(agents ...agent.Agent) *app.Services {
 	return &app.Services{Agents: agent.NewCatalog(fakeDiscoverer{agents: agents})}
 }
 
-// --- fakes for session.Service, used only by the terminate-row tests
-// (mirrors internal/domain/session's own test fakes, and
-// progress_test.go's fakeSessionBackend/fakeSessionHerdr) ---
-
 type fakeSessionBackend struct {
 	sessions map[string]session.Session
 }
@@ -95,9 +91,6 @@ type noopIDs struct{}
 
 func (noopIDs) NewID() string { return "" }
 
-// testServicesWithSession wires a session.Service backed by in-memory fakes,
-// pre-seeding sess under its own ID when sess.ID is non-empty, so
-// Terminate(sess.ID) has something to load.
 func testServicesWithSession(sess session.Session) (*app.Services, *fakeSessionHerdr) {
 	backend := newFakeSessionBackend()
 	if sess.ID != "" {
@@ -160,7 +153,6 @@ func TestUpdate_CursorWrapsAcrossPipelinesAndButton(t *testing.T) {
 		t.Fatalf("expected cursor to start at 0")
 	}
 
-	// down, down, down -> wraps back to 0 (2 pipelines + 1 button = 3 rows)
 	for i := 0; i < 3; i++ {
 		next, _ := model.Update(key("down"))
 		model = next.(Model)
@@ -178,7 +170,7 @@ func TestUpdate_CursorWrapsAcrossPipelinesAndButton(t *testing.T) {
 
 func TestUpdate_EnterOnSavedPipeline_TriggersAgentLoad(t *testing.T) {
 	m, _ := Model{loading: true, services: testServices()}.Update(pipelinesLoadedMsg{pipelines: []pipeline.Pipeline{{Name: "a", Agents: []string{"architect"}}}})
-	model := m.(Model) // cursor 0 = the saved pipeline row
+	model := m.(Model)
 
 	_, cmd := model.Update(key("enter"))
 	if cmd == nil {
@@ -196,7 +188,7 @@ func TestUpdate_EnterOnSavedPipeline_TriggersAgentLoad(t *testing.T) {
 
 func TestUpdate_EnterOnCreateButton_NoForPipeline(t *testing.T) {
 	m, _ := Model{loading: true, services: testServices()}.Update(pipelinesLoadedMsg{pipelines: nil})
-	model := m.(Model) // only row is "Create an orchestration"
+	model := m.(Model)
 
 	_, cmd := model.Update(key("enter"))
 	msg := cmd()
@@ -222,7 +214,7 @@ type errBoom struct{}
 func (errBoom) Error() string { return "boom" }
 
 func TestUpdate_AgentsLoaded_UnknownAgentShowsBannerNotSwitch(t *testing.T) {
-	m := Model{services: testServices()} // catalog has zero agents
+	m := Model{services: testServices()}
 	p := pipeline.Pipeline{Name: "trio", Agents: []string{"ghostwriter"}}
 
 	_, cmd := m.Update(agentsLoadedMsg{agents: nil, forPipeline: &p})
@@ -244,8 +236,6 @@ func TestUpdate_AgentsLoaded_ValidPipelineSwitchesToRequirement(t *testing.T) {
 		t.Fatalf("expected a switch-screen command")
 	}
 }
-
-// --- already-running / terminate row ---
 
 func TestView_AlreadyRunning_ShowsTerminateButton(t *testing.T) {
 	m, _ := Model{loading: true, alreadyRunningID: "abc-123"}.Update(pipelinesLoadedMsg{pipelines: nil})
@@ -273,7 +263,6 @@ func TestUpdate_TerminateRowIsFirstAndCountsTowardRows(t *testing.T) {
 		t.Fatalf("expected cursor to start on the terminate row, got %d", model.cursor)
 	}
 
-	// terminate row + 1 pipeline + create button = 3 rows; 3 downs wraps.
 	for i := 0; i < 3; i++ {
 		next, _ := model.Update(key("down"))
 		model = next.(Model)
@@ -288,7 +277,7 @@ func TestUpdate_EnterOnPipelineRow_StillWorksWithTerminateRowPresent(t *testing.
 		pipelines: []pipeline.Pipeline{{Name: "a", Agents: []string{"architect"}}},
 	})
 	model := m.(Model)
-	model.cursor = 1 // row 0 = terminate, row 1 = the pipeline "a"
+	model.cursor = 1
 
 	_, cmd := model.Update(key("enter"))
 	if cmd == nil {
@@ -352,7 +341,7 @@ func TestUpdate_EnterOnTerminateRow_TerminatesAndHidesRowOnSuccess(t *testing.T)
 }
 
 func TestUpdate_EnterOnTerminateRow_ErrorKeepsRowAndShowsMessage(t *testing.T) {
-	services, _ := testServicesWithSession(session.Session{}) // "ghost" was never saved
+	services, _ := testServicesWithSession(session.Session{})
 	m, _ := Model{loading: true, services: services, alreadyRunningID: "ghost"}.Update(pipelinesLoadedMsg{pipelines: nil})
 	model := m.(Model)
 

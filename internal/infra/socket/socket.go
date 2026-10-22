@@ -1,8 +1,3 @@
-// Package socket implements the Unix domain socket notify protocol from
-// architect-plan section 5.3: one NotifyMessage per connection - the client
-// dials, writes one newline-terminated JSON object, reads one
-// newline-terminated NotifyAck JSON object, then closes. No multiplexing,
-// no length-prefixing, no keep-alive.
 package socket
 
 import (
@@ -23,23 +18,10 @@ var (
 	_ domain.NotifyClient = (*Client)(nil)
 )
 
-// Path returns the socket path for a session: <root>/sessions/<id>/monday.sock,
-// where root is ~/.monday. Exported so the `monday notify` subcommand (a
-// separate process from the TUI) can compute it from --session alone,
-// without depending on infra/fsstore or any inherited environment variable
-// - see architect-plan section 11.
-//
-// Unix domain socket paths are limited to roughly 104 (macOS) to 108
-// (Linux) bytes including the trailing NUL. A deeply nested home directory
-// combined with a 36-character session UUID could theoretically approach
-// that limit; this is a known, accepted constraint of the design (not
-// worked around here) since ~/.monday/sessions/<uuid>/monday.sock comfortably
-// fits for any realistic home directory depth.
 func Path(root, sessionID string) string {
 	return filepath.Join(root, "sessions", sessionID, "monday.sock")
 }
 
-// Server implements domain.NotifyServer. root is ~/.monday.
 type Server struct {
 	root string
 }
@@ -48,23 +30,9 @@ func NewServer(root string) *Server {
 	return &Server{root: root}
 }
 
-// Listen opens the session's socket (removing any stale file left behind
-// by a prior crashed run first, per challenge #7) and returns a channel
-// that receives one NotifyMessage per accepted connection, plus a closeFn
-// that stops accepting and removes the socket file.
-//
-// The accept loop and its per-connection goroutines never touch the
-// filesystem beyond this socket and never mutate domain state directly -
-// they only push a decoded NotifyMessage onto events. All domain mutation
-// happens in the caller's single-threaded event loop (the TUI's Update),
-// which is the single-writer rule from architect-plan section 5.3.
 func (s *Server) Listen(sessionID string) (<-chan notifyproto.NotifyMessage, func() error, error) {
 	path := Path(s.root, sessionID)
 
-	// The session directory itself is normally already created by
-	// fsstore.CreateSessionDir before Listen is called, but ensure it here
-	// too - a missing parent directory should not be a surprising way for
-	// ListenUnix to fail.
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, nil, fmt.Errorf("socket: ensure session dir for %s: %w", path, err)
 	}
@@ -84,8 +52,7 @@ func (s *Server) Listen(sessionID string) (<-chan notifyproto.NotifyMessage, fun
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
-				// Either Close() below was called (expected shutdown) or a
-				// fatal listener error - either way, stop accepting.
+
 				return
 			}
 			go handleConn(conn, sessionID, events)
@@ -126,8 +93,6 @@ func writeAck(conn net.Conn, ack notifyproto.NotifyAck) {
 	_ = json.NewEncoder(conn).Encode(ack)
 }
 
-// Client implements domain.NotifyClient, used by the `monday notify`
-// subcommand - a separate process invocation from the long-running TUI.
 type Client struct{}
 
 func NewClient() *Client {

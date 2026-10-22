@@ -1,12 +1,3 @@
-// Package toolcheck is the Tool Check screen (architect-plan section 7.3):
-// shown only when herdr/claude are missing or Monday isn't running inside a
-// herdr pane - those are the only hard stops. Another Monday session
-// already running (challenge #8) is advisory, not a hard stop here: it is
-// forwarded straight through to the Launch screen via tuiapp.LaunchPayload,
-// which offers a "Terminate session" action instead. On success (no hard
-// stop) this screen never actually renders - it immediately switches to
-// the launch screen the moment the check result arrives, so the user never
-// sees a flash of a "you're all set" screen.
 package toolcheck
 
 import (
@@ -75,10 +66,7 @@ func (m Model) View(width, height int) string {
 		return theme.Centered(width, height, theme.Dim.Render("Checking your environment..."))
 	}
 	if !m.missingHerdr && !m.missingClaude && !m.notInHerdrPane {
-		// Everything passed - Update already returned a SwitchScreenMsg
-		// alongside this model, so this is only ever a single transient
-		// frame between that message being issued and it actually taking
-		// effect. Must never claim something is missing here.
+
 		return theme.Centered(width, height, theme.Dim.Render("All set - continuing..."))
 	}
 

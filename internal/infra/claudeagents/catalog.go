@@ -1,8 +1,3 @@
-// Package claudeagents discovers Claude Code agent definitions from
-// ~/.claude/agents/*.md (global) and <projectDir>/.claude/agents/*.md
-// (project), merging them per architect-plan section 3.1 (project wins on a
-// name clash). A malformed agent file is skipped with a warning rather than
-// failing discovery for the whole catalog - see architect-plan section 5.4.
 package claudeagents
 
 import (
@@ -23,9 +18,6 @@ var (
 	_ agent.Discoverer    = (*Catalog)(nil)
 )
 
-// Catalog implements domain.AgentCatalog (and the narrower agent.Discoverer
-// the domain-level agent.Catalog wraps). homeDir is injected rather than
-// resolved via os.UserHomeDir so tests can point it at t.TempDir().
 type Catalog struct {
 	homeDir string
 }
@@ -34,11 +26,6 @@ func New(homeDir string) *Catalog {
 	return &Catalog{homeDir: homeDir}
 }
 
-// Discover reads the global and (when projectDir is non-empty and its
-// .claude/agents directory exists) project agent directories, merges them,
-// and returns the merged list plus every skipped-file warning joined into a
-// single error via errors.Join. A non-nil error here is always non-fatal -
-// see agent.Catalog.Discover, which unpacks it back into a slice.
 func (c *Catalog) Discover(projectDir string) ([]agent.Agent, error) {
 	global, globalWarnings := discoverDir(filepath.Join(c.homeDir, ".claude", "agents"), agent.AgentSourceGlobal)
 
@@ -53,11 +40,6 @@ func (c *Catalog) Discover(projectDir string) ([]agent.Agent, error) {
 	return merged, errors.Join(warnings...)
 }
 
-// discoverDir parses every *.md file directly inside dir as an agent
-// definition. A missing directory is not a warning (a project with no
-// .claude/agents folder is normal); a file with no frontmatter, an
-// unterminated frontmatter block, or an empty name is skipped with one
-// warning each.
 func discoverDir(dir string, source agent.AgentSource) ([]agent.Agent, []error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -99,8 +81,6 @@ type frontmatter struct {
 	Description string `yaml:"description"`
 }
 
-// parseFrontmatter extracts the "---\n...\n---" YAML block at the top of an
-// agent markdown file.
 func parseFrontmatter(data []byte) (name, description string, err error) {
 	content := string(data)
 	content = strings.ReplaceAll(content, "\r\n", "\n")

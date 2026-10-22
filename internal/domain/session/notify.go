@@ -7,11 +7,6 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 )
 
-// NotifyRouter is the single dispatch point from a decoded NotifyMessage
-// (as delivered by infra/socket's event channel) to the matching Service
-// method. Both a CLI harness and the TUI's progress screen route every
-// incoming notify event through the same two Service methods - Route
-// exists so neither caller has to duplicate the type switch.
 type NotifyRouter struct {
 	svc *Service
 }
@@ -20,9 +15,6 @@ func NewNotifyRouter(svc *Service) *NotifyRouter {
 	return &NotifyRouter{svc: svc}
 }
 
-// Route dispatches msg to HandleDone or HandleQuestion, returning the
-// updated Session plus - for a QUES message only - its pending
-// InteractionFile.
 func (r *NotifyRouter) Route(msg notifyproto.NotifyMessage) (Session, *interaction.InteractionFile, error) {
 	switch msg.Type {
 	case notifyproto.NotifyDone:

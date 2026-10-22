@@ -1,8 +1,3 @@
-// Package graphifyprompt is the Graphify Prompt screen (architect-plan
-// section 7.3): a yes/no question, and if yes, a list of saved
-// graphify-out folders under ~/.monday/graphs to inject - never a dead
-// end, "No" or an empty list both lead to Back/Progress rather than
-// getting stuck.
 package graphifyprompt
 
 import (
@@ -98,7 +93,6 @@ func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
 			return m, nil
 		}
 
-		// phasePickGraph: rows are every saved graph, then a trailing "Back".
 		total := len(m.graphs) + 1
 		switch msg.String() {
 		case "up", "k":
