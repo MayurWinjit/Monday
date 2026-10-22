@@ -55,3 +55,11 @@ type GraphifyPromptPayload struct {
 	Pipeline    pipeline.Pipeline
 	Requirement string
 }
+
+// ProgressPayload carries everything the Progress screen needs to create a
+// new session - Graph is empty when no graphify-out was injected.
+type ProgressPayload struct {
+	Pipeline    pipeline.Pipeline
+	Requirement string
+	Graph       string
+}
