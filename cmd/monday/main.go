@@ -15,6 +15,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 	"github.com/MayurWinjit/monday/internal/infra/socket"
 	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/launch"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/toolcheck"
 )
 
@@ -47,8 +48,10 @@ func runTUI() int {
 		switch id {
 		case tuiapp.ScreenToolCheck:
 			return toolcheck.New(services.ToolCheck)
+		case tuiapp.ScreenLaunch:
+			return launch.New(services)
 		default:
-			// Not yet built (build step 13+) - fall back to the tool check
+			// Not yet built (build step 14+) - fall back to the tool check
 			// screen rather than panicking on an unhandled ScreenID.
 			return toolcheck.New(services.ToolCheck)
 		}

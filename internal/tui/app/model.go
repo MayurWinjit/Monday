@@ -105,6 +105,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeID = msg.To
 		m.active = m.factory(msg.To, msg.Payload, m.services)
 		return m, m.active.Init()
+
+	case BannerMsg:
+		m.banner = msg.Text
+		return m, nil
 	}
 
 	screen, cmd := m.active.Update(msg)
