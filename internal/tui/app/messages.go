@@ -39,3 +39,12 @@ type RequirementPayload struct {
 type AgentPickerPayload struct {
 	Agents []agent.Agent
 }
+
+// PipelineOrderPayload carries the discovered catalog (needed for the
+// pipeline ordering screen's "add again" action) and the initial agent
+// sequence (selected agents in catalog order) into the Pipeline Ordering
+// screen.
+type PipelineOrderPayload struct {
+	Available []agent.Agent
+	Sequence  []string
+}

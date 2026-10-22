@@ -15,6 +15,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 	"github.com/MayurWinjit/monday/internal/infra/socket"
 	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/agentpicker"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/launch"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/toolcheck"
 )
@@ -50,8 +51,11 @@ func runTUI() int {
 			return toolcheck.New(services.ToolCheck)
 		case tuiapp.ScreenLaunch:
 			return launch.New(services)
+		case tuiapp.ScreenAgentPicker:
+			p, _ := payload.(tuiapp.AgentPickerPayload)
+			return agentpicker.New(p.Agents)
 		default:
-			// Not yet built (build step 14+) - fall back to the tool check
+			// Not yet built (build step 15+) - fall back to the tool check
 			// screen rather than panicking on an unhandled ScreenID.
 			return toolcheck.New(services.ToolCheck)
 		}
