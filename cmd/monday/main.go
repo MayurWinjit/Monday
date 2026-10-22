@@ -61,7 +61,8 @@ func runTUI() int {
 		case tuiapp.ScreenToolCheck:
 			return toolcheck.New(services.ToolCheck)
 		case tuiapp.ScreenLaunch:
-			return launch.New(services)
+			p, _ := payload.(tuiapp.LaunchPayload)
+			return launch.New(services, p.AlreadyRunningID)
 		case tuiapp.ScreenAgentPicker:
 			p, _ := payload.(tuiapp.AgentPickerPayload)
 			return agentpicker.New(p.Agents)

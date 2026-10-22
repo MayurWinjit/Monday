@@ -1,12 +1,16 @@
 // Package toolcheck implements the startup readiness check from
-// architect-plan section 7.3: herdr and claude must be on PATH, Monday
-// must be running inside an active herdr pane, and no other Monday session
-// may already be running (challenge #8 - running two sessions at once is
-// out of scope for MVP, so this is a hard stop, not a resume prompt). It
-// reuses herdr.Client.CurrentPaneID() for the pane check rather than
-// owning that logic itself - see docs/developer-questions.md item 6 for
-// why that dependency direction was chosen over the plan's literal
-// wording.
+// architect-plan section 7.3: herdr and claude must be on PATH, and Monday
+// must be running inside an active herdr pane - those three are hard stops.
+// It also scans for another Monday session already marked "running"
+// (challenge #8), but that condition is advisory, not a hard stop: it is
+// surfaced via Result.AlreadyRunningID so the Launch screen can offer the
+// user a "Terminate session" action, rather than blocking startup outright
+// the way it did originally - a stale "running" status left behind by a
+// crashed or force-quit Monday process otherwise had no recovery path
+// short of hand-editing session.json. It reuses herdr.Client.CurrentPaneID()
+// for the pane check rather than owning that logic itself - see
+// docs/developer-questions.md item 6 for why that dependency direction was
+// chosen over the plan's literal wording.
 package toolcheck
 
 import (
@@ -26,12 +30,15 @@ type Result struct {
 	MissingHerdr     bool
 	MissingClaude    bool
 	NotInHerdrPane   bool
-	AlreadyRunningID string // non-empty: another session is already running
+	AlreadyRunningID string // non-empty: another session appears to still be running (advisory, not a hard stop - see package doc)
 }
 
-// OK reports whether every requirement is satisfied.
+// OK reports whether every hard requirement is satisfied. AlreadyRunningID
+// deliberately does not factor in here - it never blocks the TUI from
+// reaching the Launch screen, it is only carried along for that screen to
+// display and offer to terminate.
 func (r Result) OK() bool {
-	return !r.MissingHerdr && !r.MissingClaude && !r.NotInHerdrPane && r.AlreadyRunningID == ""
+	return !r.MissingHerdr && !r.MissingClaude && !r.NotInHerdrPane
 }
 
 // Checker runs the readiness check. lookPath is injected (defaults to

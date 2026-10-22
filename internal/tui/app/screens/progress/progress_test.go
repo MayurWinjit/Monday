@@ -79,6 +79,7 @@ func (f *fakeSessionHerdr) ReadAgent(paneID string) (string, error)   { return "
 func (f *fakeSessionHerdr) ExplainAgent(paneID string) (layout.AgentExplain, error) {
 	return layout.AgentExplain{}, nil
 }
+func (f *fakeSessionHerdr) ClosePane(paneID string) error { return nil }
 
 type fixedClock struct{ t time.Time }
 

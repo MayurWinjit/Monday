@@ -35,6 +35,7 @@ type HerdrClient interface {
 	SendKeys(paneID, keys string) error
 	ReadAgent(paneID string) (string, error)
 	ExplainAgent(paneID string) (layout.AgentExplain, error)
+	ClosePane(paneID string) error
 }
 
 type Clock interface {

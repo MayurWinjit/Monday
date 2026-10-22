@@ -27,6 +27,15 @@ func ShowBanner(text string) tea.Cmd {
 	return func() tea.Msg { return BannerMsg{Text: text} }
 }
 
+// LaunchPayload carries toolcheck's advisory findings into the Launch
+// screen. AlreadyRunningID is non-empty when another Monday session was
+// found still marked "running" (challenge #8) - the Launch screen uses it
+// to offer a "Terminate session" row instead of hard-blocking startup the
+// way toolcheck used to.
+type LaunchPayload struct {
+	AlreadyRunningID string
+}
+
 // RequirementPayload carries the resolved pipeline into the Requirement
 // screen, whether it came from a saved pipeline (Launch) or a freshly
 // built ad hoc sequence (Pipeline Ordering).

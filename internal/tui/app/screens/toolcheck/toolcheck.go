@@ -1,8 +1,11 @@
 // Package toolcheck is the Tool Check screen (architect-plan section 7.3):
-// shown only when herdr/claude are missing, Monday isn't running inside a
-// herdr pane, or another Monday session is already running (challenge #8).
-// On success it never actually renders - it immediately switches to the
-// launch screen the moment the check result arrives, so the user never
+// shown only when herdr/claude are missing or Monday isn't running inside a
+// herdr pane - those are the only hard stops. Another Monday session
+// already running (challenge #8) is advisory, not a hard stop here: it is
+// forwarded straight through to the Launch screen via tuiapp.LaunchPayload,
+// which offers a "Terminate session" action instead. On success (no hard
+// stop) this screen never actually renders - it immediately switches to
+// the launch screen the moment the check result arrives, so the user never
 // sees a flash of a "you're all set" screen.
 package toolcheck
 
@@ -20,11 +23,10 @@ import (
 type Model struct {
 	checker *infratoolcheck.Checker
 
-	checked          bool
-	missingHerdr     bool
-	missingClaude    bool
-	notInHerdrPane   bool
-	alreadyRunningID string
+	checked        bool
+	missingHerdr   bool
+	missingClaude  bool
+	notInHerdrPane bool
 }
 
 func New(checker *infratoolcheck.Checker) Model {
@@ -50,10 +52,9 @@ func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
 		m.missingHerdr = msg.MissingHerdr
 		m.missingClaude = msg.MissingClaude
 		m.notInHerdrPane = msg.NotInHerdrPane
-		m.alreadyRunningID = msg.AlreadyRunningID
 
 		if infratoolcheck.Result(msg).OK() {
-			return m, tuiapp.SwitchScreen(tuiapp.ScreenLaunch, nil)
+			return m, tuiapp.SwitchScreen(tuiapp.ScreenLaunch, tuiapp.LaunchPayload{AlreadyRunningID: msg.AlreadyRunningID})
 		}
 		return m, nil
 
@@ -73,7 +74,7 @@ func (m Model) View(width, height int) string {
 	if !m.checked {
 		return theme.Centered(width, height, theme.Dim.Render("Checking your environment..."))
 	}
-	if !m.missingHerdr && !m.missingClaude && !m.notInHerdrPane && m.alreadyRunningID == "" {
+	if !m.missingHerdr && !m.missingClaude && !m.notInHerdrPane {
 		// Everything passed - Update already returned a SwitchScreenMsg
 		// alongside this model, so this is only ever a single transient
 		// frame between that message being issued and it actually taking
@@ -96,11 +97,6 @@ func (m Model) View(width, height int) string {
 		b.WriteString(theme.Body.Render("  - Monday is not running inside an active herdr pane") + "\n")
 		b.WriteString(theme.Dim.Render("    launch Monday from inside an active herdr pane") + "\n\n")
 	}
-	if m.alreadyRunningID != "" {
-		b.WriteString(theme.Body.Render("  - another Monday session is already running (session "+m.alreadyRunningID+")") + "\n")
-		b.WriteString(theme.Dim.Render("    only one Monday session can run at a time - finish or quit it first") + "\n\n")
-	}
-
 	b.WriteString(components.HelpBar("r re-check", "q quit"))
 	return theme.Centered(width, height, b.String())
 }

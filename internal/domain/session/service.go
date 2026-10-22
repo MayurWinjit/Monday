@@ -413,3 +413,57 @@ func (s *Service) PollForCrashes(sessionID string) (Session, []int, error) {
 	}
 	return sess, changed, nil
 }
+
+// Terminate ends a session that toolcheck found stuck in SessionRunning -
+// typically a stale "running" status left behind by a Monday process that
+// exited without updating it (crash, kill -9, force-quit terminal, etc.;
+// see challenge #8). It is the user's escape hatch, offered on the Launch
+// screen, from hand-editing session.json to get past that.
+//
+// Every pane the session ever spawned (deduplicated - the work area pane
+// and step 0's pane are usually the same ID) is closed on a best-effort
+// basis: a pane that is already gone, or belongs to a herdr
+// tab/workspace that no longer exists, must never block termination.
+// Every non-terminal step is then flipped to failed and the session itself
+// is marked SessionFailed - the same status PollForCrashes uses for an
+// abandoned session, since from this process's point of view the two are
+// indistinguishable: pipeline work that will never complete.
+//
+// Terminate deliberately never touches Session.MondayPaneID: that is the
+// pane the stale Monday process itself ran in, not one of its pipeline's
+// panes, and closing it could reach into a terminal tab the user is
+// actively using for something else right now.
+func (s *Service) Terminate(sessionID string) (Session, error) {
+	sess, err := s.store.LoadSession(sessionID)
+	if err != nil {
+		return Session{}, fmt.Errorf("session: terminate: load session %s: %w", sessionID, err)
+	}
+
+	now := s.clock.Now()
+	closed := make(map[string]bool, len(sess.Steps)+1)
+	closePane := func(paneID string) {
+		if paneID == "" || closed[paneID] {
+			return
+		}
+		closed[paneID] = true
+		_ = s.herdr.ClosePane(paneID)
+	}
+
+	closePane(sess.WorkAreaPaneID)
+	for i := range sess.Steps {
+		step := &sess.Steps[i]
+		closePane(step.PaneID)
+		if step.Status == StepRunning || step.Status == StepNeedsInput || step.Status == StepWaiting {
+			step.Status = StepFailed
+			step.FinishedAt = &now
+		}
+	}
+
+	sess.Status = SessionFailed
+	sess.UpdatedAt = now
+
+	if err := s.store.SaveSession(sess); err != nil {
+		return Session{}, fmt.Errorf("session: terminate: save session: %w", err)
+	}
+	return sess, nil
+}

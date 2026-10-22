@@ -120,15 +120,32 @@ type errNotFound string
 
 func (e errNotFound) Error() string { return string(e) + ": not found" }
 
-func TestView_AlreadyRunning(t *testing.T) {
+func TestUpdate_AlreadyRunningDoesNotBlock_CarriesIDToLaunch(t *testing.T) {
+	// Challenge #8 revision: AlreadyRunningID alone must never hard-stop
+	// here - it's forwarded to the Launch screen, which offers a
+	// "Terminate session" action instead.
 	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
-	screen, _ := m.Update(resultMsg(infratoolcheck.Result{AlreadyRunningID: "abc-123"}))
-	view := screen.View(80, 24)
-	if !strings.Contains(view, "abc-123") {
-		t.Fatalf("expected the running session ID shown, got %q", view)
+	screen, cmd := m.Update(resultMsg(infratoolcheck.Result{AlreadyRunningID: "abc-123"}))
+	if cmd == nil {
+		t.Fatalf("expected a switch-screen command even with another session running")
 	}
-	if !strings.Contains(view, "already running") {
-		t.Fatalf("expected an already-running message, got %q", view)
+
+	msg := cmd()
+	switchMsg, ok := msg.(tuiapp.SwitchScreenMsg)
+	if !ok {
+		t.Fatalf("expected a SwitchScreenMsg, got %T", msg)
+	}
+	if switchMsg.To != tuiapp.ScreenLaunch {
+		t.Fatalf("expected to switch to ScreenLaunch, got %v", switchMsg.To)
+	}
+	payload, ok := switchMsg.Payload.(tuiapp.LaunchPayload)
+	if !ok || payload.AlreadyRunningID != "abc-123" {
+		t.Fatalf("expected a LaunchPayload carrying the running session id, got %+v", switchMsg.Payload)
+	}
+
+	view := screen.View(80, 24)
+	if strings.Contains(view, "Monday needs a couple of things first") {
+		t.Fatalf("expected no failure heading when only AlreadyRunningID is set, got:\n%s", view)
 	}
 }

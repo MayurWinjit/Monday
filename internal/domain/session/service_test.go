@@ -89,6 +89,8 @@ type fakeHerdr struct {
 	readAgentFunc  func(paneID string) (string, error)
 	explainFunc    func(paneID string) (layout.AgentExplain, error)
 	nextSplitIndex int
+	closeCalls     []string // pane IDs passed to ClosePane, in order
+	closeErr       error
 }
 
 func (f *fakeHerdr) ListPanes(tabID string) ([]layout.PaneInfo, error) {
@@ -132,6 +134,11 @@ func (f *fakeHerdr) ExplainAgent(paneID string) (layout.AgentExplain, error) {
 		return f.explainFunc(paneID)
 	}
 	return layout.AgentExplain{PaneID: paneID, State: "idle"}, nil
+}
+
+func (f *fakeHerdr) ClosePane(paneID string) error {
+	f.closeCalls = append(f.closeCalls, paneID)
+	return f.closeErr
 }
 
 type fixedClock struct{ t time.Time }
@@ -617,5 +624,114 @@ func TestPollForCrashes_AlreadyFailedSessionIsNoOp(t *testing.T) {
 	}
 	if len(changed) != 0 {
 		t.Fatalf("expected no-op for an already-failed session, got %v", changed)
+	}
+}
+
+// --- Terminate ---
+
+func TestTerminate_ClosesEveryStepPaneAndMarksFailed(t *testing.T) {
+	backend := newFakeBackend()
+	sess := baseSessionForHandlers()
+	sess.Steps[0].Status = StepDone // already finished - still gets its pane closed, but its status is left alone
+	backend.sessions[sess.ID] = sess
+
+	herdr := &fakeHerdr{}
+	svc, backend, _ := newTestService(herdr, backend, time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC))
+
+	updated, err := svc.Terminate("s1")
+	if err != nil {
+		t.Fatalf("Terminate: %v", err)
+	}
+
+	if updated.Status != SessionFailed {
+		t.Fatalf("expected session failed, got %s", updated.Status)
+	}
+	if updated.Steps[0].Status != StepDone {
+		t.Fatalf("expected the already-done step left alone, got %s", updated.Steps[0].Status)
+	}
+	if updated.Steps[1].Status != StepFailed || updated.Steps[1].FinishedAt == nil {
+		t.Fatalf("expected the waiting step flipped to failed with FinishedAt set, got %+v", updated.Steps[1])
+	}
+	if updated.Steps[2].Status != StepFailed {
+		t.Fatalf("expected the other waiting step flipped to failed, got %s", updated.Steps[2].Status)
+	}
+
+	wantClosed := map[string]bool{"w1:p2": true, "w1:p3": true, "w1:p4": true}
+	if len(herdr.closeCalls) != len(wantClosed) {
+		t.Fatalf("expected %d ClosePane calls, got %d: %v", len(wantClosed), len(herdr.closeCalls), herdr.closeCalls)
+	}
+	for _, p := range herdr.closeCalls {
+		if !wantClosed[p] {
+			t.Fatalf("unexpected pane closed: %s", p)
+		}
+	}
+
+	if backend.sessions["s1"].Status != SessionFailed {
+		t.Fatalf("expected persisted session to be failed")
+	}
+}
+
+func TestTerminate_NeverClosesTheMondayPane(t *testing.T) {
+	backend := newFakeBackend()
+	sess := baseSessionForHandlers()
+	sess.MondayPaneID = mondayPane
+	backend.sessions[sess.ID] = sess
+
+	herdr := &fakeHerdr{}
+	svc, _, _ := newTestService(herdr, backend, time.Now())
+
+	if _, err := svc.Terminate("s1"); err != nil {
+		t.Fatalf("Terminate: %v", err)
+	}
+	for _, p := range herdr.closeCalls {
+		if p == mondayPane {
+			t.Fatalf("Terminate must never close the monday pane itself, closed: %v", herdr.closeCalls)
+		}
+	}
+}
+
+func TestTerminate_DedupesWorkAreaPaneWithStepZeroPane(t *testing.T) {
+	backend := newFakeBackend()
+	sess := baseSessionForHandlers()
+	sess.WorkAreaPaneID = sess.Steps[0].PaneID // same pane, as Create always sets it
+	backend.sessions[sess.ID] = sess
+
+	herdr := &fakeHerdr{}
+	svc, _, _ := newTestService(herdr, backend, time.Now())
+
+	if _, err := svc.Terminate("s1"); err != nil {
+		t.Fatalf("Terminate: %v", err)
+	}
+	count := 0
+	for _, p := range herdr.closeCalls {
+		if p == sess.Steps[0].PaneID {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected the shared work-area/step-0 pane closed exactly once, got %d (%v)", count, herdr.closeCalls)
+	}
+}
+
+func TestTerminate_ClosePaneErrorsAreIgnored(t *testing.T) {
+	backend := newFakeBackend()
+	backend.sessions["s1"] = baseSessionForHandlers()
+
+	herdr := &fakeHerdr{closeErr: fmt.Errorf("pane already gone")}
+	svc, _, _ := newTestService(herdr, backend, time.Now())
+
+	updated, err := svc.Terminate("s1")
+	if err != nil {
+		t.Fatalf("expected ClosePane failures to be swallowed, got %v", err)
+	}
+	if updated.Status != SessionFailed {
+		t.Fatalf("expected session still marked failed despite ClosePane errors, got %s", updated.Status)
+	}
+}
+
+func TestTerminate_UnknownSessionErrors(t *testing.T) {
+	svc, _, _ := newTestService(&fakeHerdr{}, nil, time.Now())
+	if _, err := svc.Terminate("ghost"); err == nil {
+		t.Fatalf("expected an error for an unknown session")
 	}
 }

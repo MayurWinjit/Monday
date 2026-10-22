@@ -21,10 +21,19 @@ import (
 	"github.com/MayurWinjit/monday/internal/tui/theme"
 )
 
-const banner = ` __  __  ___  _  _  ___    _   __   __
-|  \/  |/ _ \| \| || \ \  /_\  \ \ / /
-| |\/| | (_) | .  || |\ \/ _ \  \ V /
-|_|  |_|\___/|_|\_||_|/_/ \_\  |_|  `
+const banner = ` 
+ /$$      /$$                           /$$                    
+| $$$    /$$$                          | $$                    
+| $$$$  /$$$$  /$$$$$$  /$$$$$$$   /$$$$$$$  /$$$$$$  /$$   /$$
+| $$ $$/$$ $$ /$$__  $$| $$__  $$ /$$__  $$ |____  $$| $$  | $$
+| $$  $$$| $$| $$  \ $$| $$  \ $$| $$  | $$  /$$$$$$$| $$  | $$
+| $$\  $ | $$| $$  | $$| $$  | $$| $$  | $$ /$$__  $$| $$  | $$
+| $$ \/  | $$|  $$$$$$/| $$  | $$|  $$$$$$$|  $$$$$$$|  $$$$$$$
+|__/     |__/ \______/ |__/  |__/ \_______/ \_______/ \____  $$
+                                                      /$$  | $$
+                                                     |  $$$$$$/
+                                                      \______/ 
+`
 
 type Model struct {
 	services *app.Services
@@ -33,10 +42,20 @@ type Model struct {
 	pipelines []pipeline.Pipeline
 	cursor    int
 	err       string
+
+	// alreadyRunningID is non-empty when toolcheck found another Monday
+	// session still marked "running" (challenge #8) - typically a stale
+	// status left behind by a Monday process that exited without updating
+	// it. While set (and not yet terminated), row 0 is a "Terminate
+	// session" button ahead of the saved pipelines and the create button.
+	alreadyRunningID string
+	terminating      bool
+	terminated       bool
+	terminateErr     string
 }
 
-func New(services *app.Services) Model {
-	return Model{services: services, loading: true}
+func New(services *app.Services, alreadyRunningID string) Model {
+	return Model{services: services, loading: true, alreadyRunningID: alreadyRunningID}
 }
 
 type pipelinesLoadedMsg struct {
@@ -75,8 +94,35 @@ func (m Model) Init() tea.Cmd {
 	return loadPipelines(m.services)
 }
 
+// showTerminateRow reports whether row 0 is currently the "Terminate
+// session" button - true exactly while another session was detected
+// running and hasn't been successfully terminated yet.
+func (m Model) showTerminateRow() bool {
+	return m.alreadyRunningID != "" && !m.terminated
+}
+
+// rowOffset is 1 while the terminate row occupies row 0, shifting every
+// pipeline row and the create button down by one; 0 otherwise.
+func (m Model) rowOffset() int {
+	if m.showTerminateRow() {
+		return 1
+	}
+	return 0
+}
+
 func (m Model) rowCount() int {
-	return len(m.pipelines) + 1 // +1 for "Create an orchestration"
+	return m.rowOffset() + len(m.pipelines) + 1 // +1 for "Create an orchestration"
+}
+
+type terminateResultMsg struct {
+	err error
+}
+
+func terminateSession(services *app.Services, sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := services.Sessions.Terminate(sessionID)
+		return terminateResultMsg{err: err}
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
@@ -99,6 +145,17 @@ func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
 		}
 		return m, tuiapp.SwitchScreen(tuiapp.ScreenAgentPicker, tuiapp.AgentPickerPayload{Agents: msg.agents})
 
+	case terminateResultMsg:
+		m.terminating = false
+		if msg.err != nil {
+			m.terminateErr = msg.err.Error()
+			return m, nil
+		}
+		m.terminateErr = ""
+		m.terminated = true
+		m.cursor = 0
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.loading || m.err != "" {
 			if msg.String() == "q" {
@@ -112,8 +169,17 @@ func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
 		case "down", "j":
 			m.cursor = (m.cursor + 1) % m.rowCount()
 		case "enter":
-			if m.cursor < len(m.pipelines) {
-				p := m.pipelines[m.cursor]
+			if m.showTerminateRow() && m.cursor == 0 {
+				if m.terminating {
+					return m, nil
+				}
+				m.terminating = true
+				m.terminateErr = ""
+				return m, terminateSession(m.services, m.alreadyRunningID)
+			}
+			idx := m.cursor - m.rowOffset()
+			if idx < len(m.pipelines) {
+				p := m.pipelines[idx]
 				return m, loadAgents(m.services, &p)
 			}
 			return m, loadAgents(m.services, nil)
@@ -135,17 +201,39 @@ func (m Model) View(width, height int) string {
 	var b strings.Builder
 	b.WriteString(theme.Heading.Render(banner) + "\n\n")
 
+	if m.alreadyRunningID != "" {
+		if m.terminated {
+			b.WriteString(theme.Body.Render("Session "+m.alreadyRunningID+" terminated.") + "\n\n")
+		} else {
+			b.WriteString(theme.ErrorText.Render("A Monday session is already running (session "+m.alreadyRunningID+")") + "\n")
+			if m.terminateErr != "" {
+				b.WriteString(theme.ErrorText.Render("  could not terminate: "+m.terminateErr) + "\n")
+			}
+			label := "Terminate session"
+			if m.terminating {
+				label = "Terminating..."
+			}
+			focused := m.cursor == 0
+			marker := "  "
+			if focused {
+				marker = "▸ "
+			}
+			b.WriteString(marker + components.Button(label, focused) + "\n\n")
+		}
+	}
+
+	offset := m.rowOffset()
 	if len(m.pipelines) > 0 {
 		b.WriteString(theme.Subheading.Render("Saved pipelines") + "\n")
 		for i, p := range m.pipelines {
 			label := fmt.Sprintf("%s  (%d agents, updated %s)", p.Name, len(p.Agents), p.UpdatedAt.Format("2006-01-02"))
-			b.WriteString(renderRow(label, i == m.cursor) + "\n")
+			b.WriteString(renderRow(label, i+offset == m.cursor) + "\n")
 		}
 		b.WriteString("\n")
 	}
 
 	createLabel := "Create an orchestration"
-	createFocused := m.cursor == len(m.pipelines)
+	createFocused := m.cursor == offset+len(m.pipelines)
 	marker := "  "
 	if createFocused {
 		marker = "▸ "
