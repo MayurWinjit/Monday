@@ -1,0 +1,5 @@
+/monday
+/bin/
+*.test
+.DS_Store
+/.claude/
