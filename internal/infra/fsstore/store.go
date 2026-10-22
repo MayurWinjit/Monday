@@ -27,6 +27,7 @@ const dirMode = 0o700
 var (
 	_ domain.Store     = (*Store)(nil)
 	_ pipeline.Backend = (*Store)(nil)
+	_ session.Backend  = (*Store)(nil)
 )
 
 // Store implements domain.Store rooted at <homeDir>/.monday. homeDir is

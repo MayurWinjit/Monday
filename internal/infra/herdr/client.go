@@ -15,9 +15,13 @@ import (
 
 	"github.com/MayurWinjit/monday/internal/domain"
 	"github.com/MayurWinjit/monday/internal/domain/layout"
+	"github.com/MayurWinjit/monday/internal/domain/session"
 )
 
-var _ domain.HerdrClient = (*Client)(nil)
+var (
+	_ domain.HerdrClient  = (*Client)(nil)
+	_ session.HerdrClient = (*Client)(nil)
+)
 
 // ErrNoCurrentPane is returned when Monday cannot determine the pane it is
 // running in: no HERDR_PANE_ID env var, and either zero or more than one
@@ -279,6 +283,22 @@ type agentStartResult struct {
 func (c *Client) StartAgent(paneID, agentName string) error {
 	_, err := call[agentStartResult](c.exec, "agent", "start", agentName, "--kind", "claude", "--pane", paneID, "--", "--agent", agentName)
 	if err == nil {
+		// agent start's response already reports interactive_ready:true, but
+		// herdr's own agent registry can still lag slightly behind that -
+		// confirmed during build-step-7 harness testing: an `agent prompt`
+		// issued immediately after `agent start` returns (even on a
+		// different, unrelated pane in between) can transiently fail with
+		// agent_not_found. `agent wait --until idle` blocks until herdr's
+		// own bookkeeping agrees the agent is really there, closing the race
+		// before Create ever calls PromptAgent. See developer-questions.md
+		// item 8.
+		_, waitStderr, waitExit, waitErr := c.exec.Run("agent", "wait", paneID, "--until", "idle", "--timeout", "10000")
+		if waitErr != nil {
+			return fmt.Errorf("herdr: start agent %s in pane %s: agent wait: %w", agentName, paneID, waitErr)
+		}
+		if waitExit != 0 {
+			return fmt.Errorf("herdr: start agent %s in pane %s: agent wait: exit %d: %s", agentName, paneID, waitExit, strings.TrimSpace(string(waitStderr)))
+		}
 		return nil
 	}
 

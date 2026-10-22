@@ -99,6 +99,25 @@ to JSON-decode an empty body (an earlier version of this code tried to decode
 it through the generic envelope helper and failed on every real invocation
 during harness testing).
 
+## 8. `agent start` can return before herdr's own agent registry is ready for `agent prompt`
+
+Found during build-step-7 harness testing (spawning a real 2-agent pipeline
+through `session.Service.Create`): calling `agent start` for one pane,
+then `agent start` for a second pane, then immediately `agent prompt` on the
+*first* pane's ID, failed with `agent_not_found: agent target <pane> not found`
+- even though that first `agent start` call's own response already reported
+`interactive_ready:true`. Checking `herdr pane list` moments later showed
+both agents present and idle, confirming this is a transient race in
+herdr's internal bookkeeping catching up, not a real failure.
+
+Fix: `StartAgent` now follows every successful `agent start` with
+`herdr agent wait <pane_id> --until idle --timeout 10000`, which blocks
+until herdr's own registry agrees the agent is actually there. This closes
+the race before `Create` loops on to the next step or calls `PromptAgent`.
+Cheap and correct beats trusting `agent start`'s own response, since
+`agent start`'s readiness claim is evidently not the same thing herdr's
+later commands check against.
+
 ## 7. `pane list` has no `--tab` filter
 
 Only `--workspace <id>`. `HerdrClient.ListPanes(tabID)` passes

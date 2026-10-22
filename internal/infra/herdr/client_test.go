@@ -117,13 +117,14 @@ func TestSplitPane_DiffFallbackWhenPaneIDMissing(t *testing.T) {
 func TestStartAgent_PassesTrailingAgentFlag(t *testing.T) {
 	ex := &fakeExecutor{responses: []fakeResponse{
 		{stdout: `{"id":"x","result":{"agent":{"pane_id":"w1:p2"},"argv":["claude","--agent","architect"]}}`},
+		{stdout: "", exitCode: 0}, // agent wait --until idle
 	}}
 	c := NewWithExecutor(ex)
 	if err := c.StartAgent("w1:p2", "architect"); err != nil {
 		t.Fatalf("StartAgent: %v", err)
 	}
-	if len(ex.calls) != 1 {
-		t.Fatalf("expected 1 call, got %d", len(ex.calls))
+	if len(ex.calls) != 2 {
+		t.Fatalf("expected 2 calls (agent start then agent wait), got %d: %v", len(ex.calls), ex.calls)
 	}
 	got := ex.calls[0]
 	want := []string{"agent", "start", "architect", "--kind", "claude", "--pane", "w1:p2", "--", "--agent", "architect"}
@@ -134,6 +135,20 @@ func TestStartAgent_PassesTrailingAgentFlag(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("expected args %v, got %v", want, got)
 		}
+	}
+	if ex.calls[1][0] != "agent" || ex.calls[1][1] != "wait" {
+		t.Fatalf("expected second call to be `agent wait ...`, got %v", ex.calls[1])
+	}
+}
+
+func TestStartAgent_WaitFailureIsReported(t *testing.T) {
+	ex := &fakeExecutor{responses: []fakeResponse{
+		{stdout: `{"id":"x","result":{"agent":{"pane_id":"w1:p2"},"argv":["claude","--agent","architect"]}}`},
+		{stderr: "timed out waiting for idle", exitCode: 1},
+	}}
+	c := NewWithExecutor(ex)
+	if err := c.StartAgent("w1:p2", "architect"); err == nil {
+		t.Fatalf("expected an error when agent wait times out")
 	}
 }
 

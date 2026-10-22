@@ -3,7 +3,17 @@
 // time.Now() directly and tests never need a real wall clock.
 package clock
 
-import "time"
+import (
+	"time"
+
+	"github.com/MayurWinjit/monday/internal/domain/pipeline"
+	"github.com/MayurWinjit/monday/internal/domain/session"
+)
+
+var (
+	_ pipeline.Clock = System{}
+	_ session.Clock  = System{}
+)
 
 type System struct{}
 
