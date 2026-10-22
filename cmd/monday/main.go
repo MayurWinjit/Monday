@@ -49,6 +49,13 @@ func runTUI() int {
 		return 1
 	}
 
+	// Installed once per launch, before the TUI starts, so the skill file
+	// is always current even if the user never completes a pipeline. A
+	// failure here is not fatal to the TUI itself - just surfaced.
+	if err := services.SkillWriter.Install(); err != nil {
+		fmt.Fprintln(os.Stderr, "monday: could not install the monday Claude skill:", err)
+	}
+
 	factory := func(id tuiapp.ScreenID, payload any, services *app.Services) tuiapp.Screen {
 		switch id {
 		case tuiapp.ScreenToolCheck:

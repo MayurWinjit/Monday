@@ -1,8 +1,6 @@
 // Package app is the one dependency-injection point (architect-plan
 // section 2): Build constructs every infra implementation and injects it
 // into the domain services the TUI and the notify subcommand both use.
-// Grows as later build steps add infra packages (toolcheck in step 12,
-// skillwriter in step 20).
 package app
 
 import (
@@ -18,6 +16,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/infra/fsstore"
 	"github.com/MayurWinjit/monday/internal/infra/herdr"
 	"github.com/MayurWinjit/monday/internal/infra/idgen"
+	"github.com/MayurWinjit/monday/internal/infra/skillwriter"
 	"github.com/MayurWinjit/monday/internal/infra/toolcheck"
 )
 
@@ -33,6 +32,7 @@ type Services struct {
 	Interactions *interaction.Service
 	Graphify     *graphify.Service
 	Herdr        *herdr.Client
+	SkillWriter  *skillwriter.Writer
 }
 
 // Build constructs every infra implementation rooted at homeDir (normally
@@ -54,6 +54,7 @@ func Build(homeDir string) (*Services, error) {
 	sessions := session.NewService(store, herdrClient, sysClock, idgen.UUID{})
 	interactions := interaction.NewService(store)
 	graphifySvc := graphify.NewService(store, herdrClient, filepath.Join(store.Root(), "graphs"))
+	skillWriter := skillwriter.New(homeDir)
 
 	return &Services{
 		Store:        store,
@@ -64,5 +65,6 @@ func Build(homeDir string) (*Services, error) {
 		Interactions: interactions,
 		Graphify:     graphifySvc,
 		Herdr:        herdrClient,
+		SkillWriter:  skillWriter,
 	}, nil
 }
