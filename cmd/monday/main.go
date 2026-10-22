@@ -1,9 +1,6 @@
 // Command monday is the entry point for the Monday multi-agent orchestration
 // tool. It dispatches to either the full-screen TUI (`monday`) or the
 // `monday notify` subcommand used by pipeline agents to signal Monday.
-//
-// The TUI itself is wired in a later build step (section 13 step 11+);
-// until then, running `monday` with no subcommand prints a placeholder.
 package main
 
 import (
@@ -12,17 +9,51 @@ import (
 	"os"
 	"path/filepath"
 
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/MayurWinjit/monday/internal/app"
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 	"github.com/MayurWinjit/monday/internal/infra/socket"
+	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/placeholder"
 )
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "notify" {
 		os.Exit(runNotify(os.Args[2:]))
 	}
+	os.Exit(runTUI())
+}
 
-	fmt.Fprintln(os.Stderr, "monday: the TUI is not yet implemented - run `monday notify --help` for the notify subcommand")
-	os.Exit(1)
+// runTUI wires internal/app.Services and launches the full-screen TUI. The
+// screen factory below only knows about the placeholder screen for now
+// (build step 11) - later steps replace the initial screen and grow the
+// factory's switch as each real screen is built, without ever needing
+// internal/tui/app itself to import a concrete screen package (see
+// internal/tui/app/model.go's package comment).
+func runTUI() int {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "monday:", err)
+		return 1
+	}
+
+	services, err := app.Build(homeDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "monday:", err)
+		return 1
+	}
+
+	factory := func(id tuiapp.ScreenID, payload any, services *app.Services) tuiapp.Screen {
+		return placeholder.New()
+	}
+
+	model := tuiapp.New(services, factory, tuiapp.ScreenToolCheck, placeholder.New())
+	if _, err := tea.NewProgram(model, tea.WithAltScreen()).Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "monday:", err)
+		return 1
+	}
+	return 0
 }
 
 // runNotify implements `monday notify --session <id> --pane <pane_id> --type QUES|DONE`
