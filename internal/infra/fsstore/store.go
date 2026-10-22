@@ -16,6 +16,7 @@ import (
 	"sort"
 
 	"github.com/MayurWinjit/monday/internal/domain"
+	"github.com/MayurWinjit/monday/internal/domain/graphify"
 	"github.com/MayurWinjit/monday/internal/domain/history"
 	"github.com/MayurWinjit/monday/internal/domain/interaction"
 	"github.com/MayurWinjit/monday/internal/domain/pipeline"
@@ -29,6 +30,7 @@ var (
 	_ pipeline.Backend    = (*Store)(nil)
 	_ session.Backend     = (*Store)(nil)
 	_ interaction.Backend = (*Store)(nil)
+	_ graphify.Backend    = (*Store)(nil)
 )
 
 // Store implements domain.Store rooted at <homeDir>/.monday. homeDir is

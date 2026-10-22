@@ -14,13 +14,15 @@ import (
 	"strings"
 
 	"github.com/MayurWinjit/monday/internal/domain"
+	"github.com/MayurWinjit/monday/internal/domain/graphify"
 	"github.com/MayurWinjit/monday/internal/domain/layout"
 	"github.com/MayurWinjit/monday/internal/domain/session"
 )
 
 var (
-	_ domain.HerdrClient  = (*Client)(nil)
-	_ session.HerdrClient = (*Client)(nil)
+	_ domain.HerdrClient   = (*Client)(nil)
+	_ session.HerdrClient  = (*Client)(nil)
+	_ graphify.HerdrClient = (*Client)(nil)
 )
 
 // ErrNoCurrentPane is returned when Monday cannot determine the pane it is
