@@ -124,8 +124,8 @@ type wirePane struct {
 	AgentStatus string `json:"agent_status"`
 }
 
-func (p wirePane) toDomain() domain.PaneInfo {
-	return domain.PaneInfo{
+func (p wirePane) toDomain() layout.PaneInfo {
+	return layout.PaneInfo{
 		PaneID:      p.PaneID,
 		TabID:       p.TabID,
 		WorkspaceID: p.WorkspaceID,
@@ -203,7 +203,7 @@ func (c *Client) CurrentTabID() (string, error) {
 	return "", ErrNoCurrentPane
 }
 
-func (c *Client) ListPanes(tabID string) ([]domain.PaneInfo, error) {
+func (c *Client) ListPanes(tabID string) ([]layout.PaneInfo, error) {
 	args := []string{"pane", "list"}
 	if ws := workspaceFromTabID(tabID); ws != "" {
 		args = append(args, "--workspace", ws)
@@ -214,7 +214,7 @@ func (c *Client) ListPanes(tabID string) ([]domain.PaneInfo, error) {
 		return nil, fmt.Errorf("herdr: list panes for tab %s: %w", tabID, err)
 	}
 
-	out := make([]domain.PaneInfo, 0, len(res.Panes))
+	out := make([]layout.PaneInfo, 0, len(res.Panes))
 	for _, p := range res.Panes {
 		if tabID != "" && p.TabID != tabID {
 			continue
@@ -351,24 +351,24 @@ type explainResponse struct {
 	State string `json:"state"`
 }
 
-func (c *Client) ExplainAgent(paneID string) (domain.AgentExplain, error) {
+func (c *Client) ExplainAgent(paneID string) (layout.AgentExplain, error) {
 	stdout, stderr, exitCode, err := c.exec.Run("agent", "explain", "--json", "--format", "json", paneID)
 	if err != nil {
-		return domain.AgentExplain{}, fmt.Errorf("herdr: explain agent %s: %w", paneID, err)
+		return layout.AgentExplain{}, fmt.Errorf("herdr: explain agent %s: %w", paneID, err)
 	}
 	if exitCode != 0 {
 		var eenv errorEnvelope
 		if jsonErr := json.Unmarshal(stderr, &eenv); jsonErr == nil && eenv.Error.Code != "" {
-			return domain.AgentExplain{}, &APIError{Args: []string{"agent", "explain", paneID}, Code: eenv.Error.Code, Message: eenv.Error.Message}
+			return layout.AgentExplain{}, &APIError{Args: []string{"agent", "explain", paneID}, Code: eenv.Error.Code, Message: eenv.Error.Message}
 		}
-		return domain.AgentExplain{}, fmt.Errorf("herdr: explain agent %s: exit %d: %s", paneID, exitCode, strings.TrimSpace(string(stderr)))
+		return layout.AgentExplain{}, fmt.Errorf("herdr: explain agent %s: exit %d: %s", paneID, exitCode, strings.TrimSpace(string(stderr)))
 	}
 
 	var resp explainResponse
 	if jsonErr := json.Unmarshal(stdout, &resp); jsonErr != nil {
-		return domain.AgentExplain{}, fmt.Errorf("herdr: explain agent %s: decode response: %w", paneID, jsonErr)
+		return layout.AgentExplain{}, fmt.Errorf("herdr: explain agent %s: decode response: %w", paneID, jsonErr)
 	}
-	return domain.AgentExplain{
+	return layout.AgentExplain{
 		PaneID: paneID,
 		State:  resp.State,
 		Detail: resp.Agent,

@@ -12,38 +12,16 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/session"
 )
 
-// PaneInfo is the domain-level projection of a herdr pane, used by
-// HerdrClient.ListPanes and by the crash-detection diff in
-// session.Service.PollForCrashes.
-type PaneInfo struct {
-	PaneID      string
-	TabID       string
-	WorkspaceID string
-	CWD         string
-	Focused     bool
-	AgentStatus string
-}
-
-// AgentExplain is the domain-level projection of `herdr agent explain --json`,
-// used to distinguish a genuinely crashed/closed agent from one that is
-// merely idle.
-type AgentExplain struct {
-	PaneID  string
-	State   string
-	Detail  string
-	Crashed bool
-}
-
 type HerdrClient interface {
 	CurrentPaneID() (string, error)
 	CurrentTabID() (string, error)
-	ListPanes(tabID string) ([]PaneInfo, error)
+	ListPanes(tabID string) ([]layout.PaneInfo, error)
 	SplitPane(paneID string, dir layout.Direction) (newPaneID string, err error)
 	StartAgent(paneID, agentName string) error
 	PromptAgent(paneID, prompt string) error
 	SendKeys(paneID, keys string) error
 	ReadAgent(paneID string) (string, error)
-	ExplainAgent(paneID string) (AgentExplain, error)
+	ExplainAgent(paneID string) (layout.AgentExplain, error)
 	ClosePane(paneID string) error
 }
 
