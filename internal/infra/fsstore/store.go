@@ -24,7 +24,10 @@ import (
 
 const dirMode = 0o700
 
-var _ domain.Store = (*Store)(nil)
+var (
+	_ domain.Store     = (*Store)(nil)
+	_ pipeline.Backend = (*Store)(nil)
+)
 
 // Store implements domain.Store rooted at <homeDir>/.monday. homeDir is
 // injected rather than resolved internally via os.UserHomeDir so tests can
