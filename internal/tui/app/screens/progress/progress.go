@@ -1,10 +1,10 @@
 // Package progress is the Stepped Progress screen (architect-plan section
 // 7.3) - the primary "idiot friendly" screen: one row per pipeline step
 // with a live status badge and elapsed timer, a notify-driven handoff
-// between steps, crash detection every third tick, and the post-pipeline
-// graphify update/cleanup confirmation. The Q&A view is not a separate
-// routable screen - it is an overlay owned by this screen (m.qa), per
-// architect-plan section 7.1.
+// between steps, crash detection every third tick, an embedded Q&A
+// overlay, and the post-pipeline graphify update/cleanup confirmation.
+// The Q&A view is not a separate routable screen - it is an overlay owned
+// by this screen (m.qa), per architect-plan section 7.1.
 package progress
 
 import (
@@ -16,11 +16,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/MayurWinjit/monday/internal/app"
+	"github.com/MayurWinjit/monday/internal/domain/interaction"
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 	"github.com/MayurWinjit/monday/internal/domain/pipeline"
 	"github.com/MayurWinjit/monday/internal/domain/session"
 	"github.com/MayurWinjit/monday/internal/infra/socket"
 	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/qa"
 	"github.com/MayurWinjit/monday/internal/tui/components"
 	"github.com/MayurWinjit/monday/internal/tui/theme"
 )
@@ -42,31 +44,13 @@ type Model struct {
 	spinner   spinner.Model
 	handleErr string
 
-	// qa is a placeholder for the Q&A overlay until build step 19 replaces
-	// it with the real interactive UX from architect-plan section 7.3
-	// (option list, Other free-text, per-question navigation). It exists
-	// now only so the needs_input pathway is wired and the screen compiles
-	// end to end before the overlay is built - it is deliberately
-	// non-functional (any key just closes it without submitting, so the
-	// agent stays blocked waiting for a real answer).
-	qa *qaPlaceholder
+	qa *qa.Model // nil when no overlay is open
 
 	// Post-completion graphify confirm flow (architect-plan section 8.4) -
 	// never automatic, always a manual key press either way.
 	graphifyAsked     bool
 	graphifyRequested bool
 	graphifyFinalized bool
-}
-
-type qaPlaceholder struct {
-	file interactionFileView
-}
-
-// interactionFileView avoids importing domain/interaction just for this
-// placeholder's display needs; step 19 replaces this whole type.
-type interactionFileView struct {
-	Agent        string
-	QuestionText string
 }
 
 func New(services *app.Services, payload tuiapp.ProgressPayload) Model {
@@ -188,15 +172,28 @@ func graphifyCleanupCmd(services *app.Services, symlinkPath string) tea.Cmd {
 	}
 }
 
+type qaOpenedMsg struct {
+	file interaction.InteractionFile
+	step session.PipelineStep
+	err  error
+}
+
+func openQACmd(services *app.Services, sessionID string, step session.PipelineStep) tea.Cmd {
+	return func() tea.Msg {
+		file, err := services.Interactions.Load(sessionID, step.InteractionsFile)
+		return qaOpenedMsg{file: file, step: step, err: err}
+	}
+}
+
 // --- update ---
 
-func (m Model) currentStepIndex() (int, bool) {
-	for i, step := range m.session.Steps {
+func (m Model) currentNeedsInputStep() (session.PipelineStep, bool) {
+	for _, step := range m.session.Steps {
 		if step.Status == session.StepNeedsInput {
-			return i, true
+			return step, true
 		}
 	}
-	return 0, false
+	return session.PipelineStep{}, false
 }
 
 func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
@@ -234,6 +231,42 @@ func (m Model) Update(msg tea.Msg) (tuiapp.Screen, tea.Cmd) {
 		if msg.err == nil {
 			m.session = msg.session
 		}
+		return m, nil
+
+	case qaOpenedMsg:
+		if msg.err != nil {
+			m.handleErr = msg.err.Error()
+			return m, nil
+		}
+		opened := qa.New(m.services.Interactions, m.services.Sessions, m.session.ID, msg.step.PaneID, msg.step.AgentName, msg.step.InteractionsFile, msg.file)
+		m.qa = &opened
+		return m, nil
+
+	case qa.SubmitResultMsg:
+		// The one non-key message the open overlay produces (its own
+		// submit round trip to interaction.Service/session.Service) - this
+		// has to be routed back into qa.Update explicitly, since Progress
+		// only forwards key messages to it directly (architect-plan section
+		// 7.3: "every key is forwarded to m.qa.Update first"). qa.Update
+		// turns this into SubmittedMsg below.
+		if m.qa != nil {
+			updated, cmd := m.qa.Update(msg)
+			m.qa = &updated
+			return m, cmd
+		}
+		return m, nil
+
+	case qa.SubmittedMsg:
+		m.qa = nil
+		if msg.Err != nil {
+			m.handleErr = msg.Err.Error()
+			return m, nil
+		}
+		m.session = msg.Session
+		return m, nil
+
+	case qa.ClosedMsg:
+		m.qa = nil
 		return m, nil
 
 	case graphifyUpdateRequestedMsg:
@@ -274,11 +307,11 @@ func (m Model) handleNotify(evt notifyproto.NotifyMessage) (tuiapp.Screen, tea.C
 			return m, listenForNotify(m.events)
 		}
 		m.session = sess
-		questionText := ""
-		if len(file.Questions) > 0 {
-			questionText = file.Questions[0].Question
+		step, ok := m.currentNeedsInputStep()
+		if ok {
+			opened := qa.New(m.services.Interactions, m.services.Sessions, m.session.ID, step.PaneID, step.AgentName, step.InteractionsFile, file)
+			m.qa = &opened
 		}
-		m.qa = &qaPlaceholder{file: interactionFileView{Agent: file.Agent, QuestionText: questionText}}
 		return m, listenForNotify(m.events)
 
 	default:
@@ -288,11 +321,9 @@ func (m Model) handleNotify(evt notifyproto.NotifyMessage) (tuiapp.Screen, tea.C
 
 func (m Model) handleKey(msg tea.KeyMsg) (tuiapp.Screen, tea.Cmd) {
 	if m.qa != nil {
-		// Placeholder behavior only (see qaPlaceholder's doc comment) - any
-		// key just dismisses it. Step 19 replaces this with real answer
-		// collection + ResumeStep.
-		m.qa = nil
-		return m, nil
+		updated, cmd := m.qa.Update(msg)
+		m.qa = &updated
+		return m, cmd
 	}
 
 	if m.session.Status == session.SessionDone {
@@ -326,9 +357,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tuiapp.Screen, tea.Cmd) {
 
 	switch msg.String() {
 	case "enter":
-		if idx, ok := m.currentStepIndex(); ok {
-			step := m.session.Steps[idx]
-			m.qa = &qaPlaceholder{file: interactionFileView{Agent: step.AgentName}}
+		if step, ok := m.currentNeedsInputStep(); ok {
+			return m, openQACmd(m.services, m.session.ID, step)
 		}
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -345,9 +375,8 @@ func (m Model) View(width, height int) string {
 	if m.creating {
 		return theme.Centered(width, height, m.spinner.View()+" "+theme.Dim.Render("Starting the pipeline..."))
 	}
-
 	if m.qa != nil {
-		return theme.Centered(width, height, m.renderQAPlaceholder())
+		return m.qa.View(width, height)
 	}
 
 	var b strings.Builder
@@ -373,7 +402,7 @@ func (m Model) View(width, height int) string {
 	case session.SessionDone:
 		b.WriteString(m.renderCompletion())
 	default:
-		if _, ok := m.currentStepIndex(); ok {
+		if _, ok := m.currentNeedsInputStep(); ok {
 			b.WriteString(theme.ErrorText.Render("A step needs input - press enter to answer.") + "\n\n")
 		} else {
 			b.WriteString(m.spinner.View() + " " + theme.Dim.Render("working...") + "\n\n")
@@ -395,11 +424,4 @@ func (m Model) renderCompletion() string {
 		return theme.Body.Render("Press enter once the graph update finishes in the pane.") + "\n\n" + components.HelpBar("enter confirm done", "q quit")
 	}
 	return theme.Body.Render("Pipeline finished. Update the graphify graph with the new context?") + "\n\n" + components.HelpBar("y yes", "n no", "q quit")
-}
-
-func (m Model) renderQAPlaceholder() string {
-	return theme.Heading.Render(fmt.Sprintf("%s needs input", m.qa.file.Agent)) + "\n\n" +
-		theme.Dim.Render(m.qa.file.QuestionText) + "\n\n" +
-		theme.ErrorText.Render("Q&A overlay not yet implemented (build step 19).") + "\n\n" +
-		components.HelpBar("any key dismiss (does not answer yet)")
 }

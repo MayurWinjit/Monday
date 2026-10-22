@@ -16,6 +16,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/layout"
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 	"github.com/MayurWinjit/monday/internal/domain/session"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/qa"
 )
 
 // --- fakes (mirrors internal/domain/session's own test fakes) ---
@@ -99,7 +100,8 @@ func testServices() (*app.Services, *fakeSessionBackend) {
 	herdrFake := &fakeSessionHerdr{}
 	svc := session.NewService(backend, herdrFake, fixedClock{time.Now()}, &sequentialIDs{ids: []string{"s1"}})
 	graphifySvc := graphify.NewService(fakeGraphBackend{}, fakeGraphHerdr{}, "/x")
-	return &app.Services{Sessions: svc, Graphify: graphifySvc}, backend
+	interactionsSvc := interaction.NewService(backend)
+	return &app.Services{Sessions: svc, Graphify: graphifySvc, Interactions: interactionsSvc}, backend
 }
 
 type fakeGraphBackend struct{}
@@ -223,7 +225,7 @@ func TestUpdate_NotifyDone_AdvancesSession(t *testing.T) {
 	}
 }
 
-func TestUpdate_NotifyQuestion_OpensQAPlaceholder(t *testing.T) {
+func TestUpdate_NotifyQuestion_OpensQAOverlay(t *testing.T) {
 	services, backend := testServices()
 	sess := runningSession()
 	backend.sessions[sess.ID] = sess
@@ -242,19 +244,83 @@ func TestUpdate_NotifyQuestion_OpensQAPlaceholder(t *testing.T) {
 	model := screen.(Model)
 
 	if model.qa == nil {
-		t.Fatalf("expected the Q&A placeholder to open")
+		t.Fatalf("expected the Q&A overlay to open")
 	}
 	if model.session.Steps[1].Status != session.StepNeedsInput {
 		t.Fatalf("expected step 1 needs_input, got %+v", model.session.Steps[1])
 	}
 }
 
-func TestUpdate_AnyKeyDismissesQAPlaceholder(t *testing.T) {
-	m := Model{qa: &qaPlaceholder{file: interactionFileView{Agent: "developer"}}}
-	screen, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+func TestUpdate_EscClosesQAOverlay(t *testing.T) {
+	services, _ := testServices()
+	opened := qa.New(services.Interactions, services.Sessions, "s1", "w1:p2", "developer", "developer", interaction.InteractionFile{
+		Agent:     "developer",
+		Questions: []interaction.Question{{ID: "q1", Question: "Which approach?", Options: []string{"A", "B"}}},
+	})
+	m := Model{qa: &opened}
+
+	screen, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	model := screen.(Model)
+	// esc is forwarded into qa.Update, which returns a ClosedMsg-producing
+	// command - Progress only clears m.qa once that message actually
+	// arrives back through its own top-level Update.
+	if model.qa == nil {
+		t.Fatalf("expected qa to still be open immediately after esc (closes via the returned command's message)")
+	}
+	if cmd == nil {
+		t.Fatalf("expected a command from qa.Update")
+	}
+	screen, _ = model.Update(cmd())
+	model = screen.(Model)
+	if model.qa != nil {
+		t.Fatalf("expected qa cleared after ClosedMsg arrives")
+	}
+}
+
+func TestUpdate_QASubmitted_ClearsOverlayAndUpdatesSession(t *testing.T) {
+	m := Model{}
+	resumedSession := runningSession()
+	resumedSession.Steps[1].Status = session.StepRunning
+
+	screen, _ := m.Update(qa.SubmittedMsg{Session: resumedSession})
 	model := screen.(Model)
 	if model.qa != nil {
-		t.Fatalf("expected the placeholder to close on any key")
+		t.Fatalf("expected qa cleared on SubmittedMsg")
+	}
+	if model.session.Steps[1].Status != session.StepRunning {
+		t.Fatalf("expected the resumed session to replace m.session")
+	}
+}
+
+func TestUpdate_EnterOnNeedsInputStep_OpensQAFromFile(t *testing.T) {
+	services, backend := testServices()
+	sess := runningSession()
+	sess.Steps[1].Status = session.StepNeedsInput
+	sess.Steps[1].InteractionsFile = "developer"
+	backend.sessions[sess.ID] = sess
+	backend.interactions["s1/developer"] = interaction.InteractionFile{
+		Agent:     "developer",
+		Questions: []interaction.Question{{ID: "q1", Question: "Which approach?"}},
+	}
+
+	m := Model{session: sess, services: services}
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatalf("expected enter on a needs_input step to open a load command")
+	}
+	msg := cmd()
+	opened, ok := msg.(qaOpenedMsg)
+	if !ok {
+		t.Fatalf("expected qaOpenedMsg, got %T", msg)
+	}
+	if opened.err != nil {
+		t.Fatalf("unexpected error loading interactions: %v", opened.err)
+	}
+
+	screen, _ := m.Update(opened)
+	model := screen.(Model)
+	if model.qa == nil {
+		t.Fatalf("expected qa opened from the loaded file")
 	}
 }
 
@@ -357,5 +423,35 @@ func TestUpdate_QQuits(t *testing.T) {
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	if cmd == nil {
 		t.Fatalf("expected 'q' to produce a quit command")
+	}
+}
+
+func TestUpdate_QASubmitResultMsg_RoutesIntoOverlayAndClosesOnSuccess(t *testing.T) {
+	// Regression: Progress only forwards tea.KeyMsg directly into
+	// qa.Update, so the overlay's own async submit result (produced by a
+	// tea.Cmd, not a keypress) needs an explicit case in Progress's top
+	// level switch or it is silently dropped and the overlay never closes
+	// even though the agent was actually resumed.
+	services, _ := testServices()
+	opened := qa.New(services.Interactions, services.Sessions, "s1", "w1:p2", "developer", "developer", interaction.InteractionFile{
+		Agent:     "developer",
+		Questions: []interaction.Question{{ID: "q1", Question: "Which approach?", Options: []string{"A"}}},
+	})
+	m := Model{qa: &opened, services: services}
+
+	resultMsg := qa.SubmitResultMsg{}
+	screen, cmd := m.Update(resultMsg)
+	model := screen.(Model)
+	if model.qa == nil {
+		t.Fatalf("expected qa still open immediately (closes via the chained SubmittedMsg command)")
+	}
+	if cmd == nil {
+		t.Fatalf("expected a command producing SubmittedMsg")
+	}
+
+	screen, _ = model.Update(cmd())
+	model = screen.(Model)
+	if model.qa != nil {
+		t.Fatalf("expected qa closed after SubmittedMsg")
 	}
 }
