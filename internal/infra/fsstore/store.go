@@ -37,10 +37,10 @@ func New(homeDir string) *Store {
 	return &Store{root: filepath.Join(homeDir, ".monday")}
 }
 
-func (s *Store) Root() string           { return s.root }
-func (s *Store) pipelinesDir() string   { return filepath.Join(s.root, "pipelines") }
-func (s *Store) sessionsDir() string    { return filepath.Join(s.root, "sessions") }
-func (s *Store) graphsDir() string      { return filepath.Join(s.root, "graphs") }
+func (s *Store) Root() string         { return s.root }
+func (s *Store) pipelinesDir() string { return filepath.Join(s.root, "pipelines") }
+func (s *Store) sessionsDir() string  { return filepath.Join(s.root, "sessions") }
+func (s *Store) graphsDir() string    { return filepath.Join(s.root, "graphs") }
 func (s *Store) sessionDir(id string) string {
 	return filepath.Join(s.sessionsDir(), id)
 }
