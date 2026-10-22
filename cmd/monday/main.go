@@ -19,6 +19,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/graphifyprompt"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/launch"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/pipelineorder"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/progress"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/requirement"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/toolcheck"
 )
@@ -66,9 +67,10 @@ func runTUI() int {
 		case tuiapp.ScreenGraphifyPrompt:
 			p, _ := payload.(tuiapp.GraphifyPromptPayload)
 			return graphifyprompt.New(services, p.Pipeline, p.Requirement)
+		case tuiapp.ScreenProgress:
+			p, _ := payload.(tuiapp.ProgressPayload)
+			return progress.New(services, p)
 		default:
-			// Not yet built (build step 18+) - fall back to the tool check
-			// screen rather than panicking on an unhandled ScreenID.
 			return toolcheck.New(services.ToolCheck)
 		}
 	}
