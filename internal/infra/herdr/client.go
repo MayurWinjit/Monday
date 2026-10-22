@@ -320,16 +320,42 @@ func (c *Client) StartAgent(paneID, agentName string) error {
 	return nil
 }
 
+// retryOnAgentNotFound retries fn a bounded number of times, pausing on an
+// `agent wait` in between, when fn fails with an agent_not_found APIError.
+// Confirmed during build-step-9 harness testing: herdr's agent registry can
+// transiently disagree that a pane's agent exists even after that pane's own
+// StartAgent (which already waits for idle) succeeded - starting a sibling
+// agent on a different pane afterward can retrigger the same race PromptAgent
+// hit in step 7. See developer-questions.md item 9.
+func (c *Client) retryOnAgentNotFound(paneID string, fn func() error) error {
+	const maxAttempts = 5
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		lastErr = fn()
+		if lastErr == nil {
+			return nil
+		}
+		var apiErr *APIError
+		if !errors.As(lastErr, &apiErr) || apiErr.Code != "agent_not_found" {
+			return lastErr
+		}
+		c.exec.Run("agent", "wait", paneID, "--until", "idle", "--timeout", "3000")
+	}
+	return lastErr
+}
+
 type agentPromptResult struct {
 	Agent wirePane `json:"agent"`
 }
 
 func (c *Client) PromptAgent(paneID, prompt string) error {
-	_, err := call[agentPromptResult](c.exec, "agent", "prompt", paneID, prompt)
-	if err != nil {
-		return fmt.Errorf("herdr: prompt pane %s: %w", paneID, err)
-	}
-	return nil
+	return c.retryOnAgentNotFound(paneID, func() error {
+		_, err := call[agentPromptResult](c.exec, "agent", "prompt", paneID, prompt)
+		if err != nil {
+			return fmt.Errorf("herdr: prompt pane %s: %w", paneID, err)
+		}
+		return nil
+	})
 }
 
 func (c *Client) SendKeys(paneID, keys string) error {
@@ -347,19 +373,24 @@ func (c *Client) SendKeys(paneID, keys string) error {
 }
 
 func (c *Client) ReadAgent(paneID string) (string, error) {
-	stdout, stderr, exitCode, err := c.exec.Run("agent", "read", paneID)
-	if err != nil {
-		return "", fmt.Errorf("herdr: read agent %s: %w", paneID, err)
-	}
-	if exitCode != 0 {
-		var eenv errorEnvelope
-		if jsonErr := json.Unmarshal(stderr, &eenv); jsonErr == nil && eenv.Error.Code != "" {
-			return "", &APIError{Args: []string{"agent", "read", paneID}, Code: eenv.Error.Code, Message: eenv.Error.Message}
+	var out string
+	err := c.retryOnAgentNotFound(paneID, func() error {
+		stdout, stderr, exitCode, err := c.exec.Run("agent", "read", paneID)
+		if err != nil {
+			return fmt.Errorf("herdr: read agent %s: %w", paneID, err)
 		}
-		return "", fmt.Errorf("herdr: read agent %s: exit %d: %s", paneID, exitCode, strings.TrimSpace(string(stderr)))
-	}
-	// `agent read` prints raw terminal text, not a JSON envelope.
-	return string(stdout), nil
+		if exitCode != 0 {
+			var eenv errorEnvelope
+			if jsonErr := json.Unmarshal(stderr, &eenv); jsonErr == nil && eenv.Error.Code != "" {
+				return &APIError{Args: []string{"agent", "read", paneID}, Code: eenv.Error.Code, Message: eenv.Error.Message}
+			}
+			return fmt.Errorf("herdr: read agent %s: exit %d: %s", paneID, exitCode, strings.TrimSpace(string(stderr)))
+		}
+		// `agent read` prints raw terminal text, not a JSON envelope.
+		out = string(stdout)
+		return nil
+	})
+	return out, err
 }
 
 // --- agent explain (developer-questions.md item 4) ---

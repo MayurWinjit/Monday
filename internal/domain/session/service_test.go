@@ -484,6 +484,52 @@ func TestHandleQuestion_UnknownPaneErrors(t *testing.T) {
 	}
 }
 
+// --- ResumeStep ---
+
+func TestResumeStep_FlipsToRunningAndPrompts(t *testing.T) {
+	backend := newFakeBackend()
+	sess := baseSessionForHandlers()
+	sess.Steps[1].Status = StepNeedsInput
+	backend.sessions["s1"] = sess
+
+	herdr := &fakeHerdr{}
+	svc, backend, _ := newTestService(herdr, backend, time.Now())
+
+	updated, err := svc.ResumeStep("s1", "w1:p3", "Your questions have been answered. Read interactions/developer.json and continue.")
+	if err != nil {
+		t.Fatalf("ResumeStep: %v", err)
+	}
+	if updated.Steps[1].Status != StepRunning {
+		t.Fatalf("expected step 1 running, got %s", updated.Steps[1].Status)
+	}
+	if len(herdr.promptCalls) != 1 || len(herdr.sendKeysCalls) != 1 {
+		t.Fatalf("expected exactly 1 prompt + 1 send-keys call, got %d/%d", len(herdr.promptCalls), len(herdr.sendKeysCalls))
+	}
+	if backend.sessions["s1"].Steps[1].Status != StepRunning {
+		t.Fatalf("expected persisted session to reflect running")
+	}
+}
+
+func TestResumeStep_RejectsStepNotNeedsInput(t *testing.T) {
+	backend := newFakeBackend()
+	backend.sessions["s1"] = baseSessionForHandlers() // step 0 is "running", not needs_input
+	svc, _, _ := newTestService(&fakeHerdr{}, backend, time.Now())
+
+	if _, err := svc.ResumeStep("s1", "w1:p2", "resume"); err == nil {
+		t.Fatalf("expected an error resuming a step that is not needs_input")
+	}
+}
+
+func TestResumeStep_UnknownPaneErrors(t *testing.T) {
+	backend := newFakeBackend()
+	backend.sessions["s1"] = baseSessionForHandlers()
+	svc, _, _ := newTestService(&fakeHerdr{}, backend, time.Now())
+
+	if _, err := svc.ResumeStep("s1", "ghost-pane", "resume"); err == nil {
+		t.Fatalf("expected an error for an unknown pane")
+	}
+}
+
 // --- PollForCrashes ---
 
 func TestPollForCrashes_NoChangeWhenAllPanesPresent(t *testing.T) {

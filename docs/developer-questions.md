@@ -118,6 +118,27 @@ Cheap and correct beats trusting `agent start`'s own response, since
 `agent start`'s readiness claim is evidently not the same thing herdr's
 later commands check against.
 
+## 9. The item-8 fix was not sufficient - agent_not_found can still race a sibling pane's own agent start
+
+Found during build-step-9 harness testing: even with `StartAgent` waiting
+for `agent wait --until idle` on its own pane before returning (item 8's
+fix), a *subsequent* `StartAgent` call for a different pane in the same
+`Create` loop can still cause a following `PromptAgent` on the *first*
+pane to transiently fail with `agent_not_found` - herdr's agent registry
+evidently has a brief window where starting one agent can make a
+different, already-ready agent momentarily disappear from lookups.
+
+Fix: `PromptAgent`, `ReadAgent` (and anything else that calls an
+`agent`-namespaced subcommand against a specific pane) now go through
+`retryOnAgentNotFound`: on an `agent_not_found` APIError specifically,
+retry up to 5 times with an `agent wait --until idle` pause in between;
+any other error is returned immediately, no retry. `ExplainAgent` is
+deliberately left unwrapped - developer-questions item 5 already
+establishes that an `agent_not_found` from `ExplainAgent` is sometimes a
+legitimate "this pane really has no agent" signal, and nothing currently
+depends on it being fast-failing, so masking that with blind retries
+isn't worth the risk for no present benefit.
+
 ## 7. `pane list` has no `--tab` filter
 
 Only `--workspace <id>`. `HerdrClient.ListPanes(tabID)` passes

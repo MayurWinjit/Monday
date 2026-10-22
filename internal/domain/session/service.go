@@ -327,6 +327,44 @@ func (s *Service) HandleQuestion(msg notifyproto.NotifyMessage) (Session, intera
 	return sess, file, nil
 }
 
+// ResumeStep flips a needs_input step back to running and sends it
+// resumePrompt (interaction.ResumePrompt's fixed template) followed by an
+// enter keypress. It is the herdr side-effect + persistence half of the
+// Q&A resume flow described in architect-plan section 6/7.3 - the other
+// half, merging submitted answers into the interactions file itself, is
+// interaction.Service.SubmitAnswers. Keeping the herdr call and the session
+// mutation here (rather than in the TUI's Q&A screen) preserves "one code
+// path for every mutation" from architect-plan section 1.
+func (s *Service) ResumeStep(sessionID, paneID, resumePrompt string) (Session, error) {
+	sess, err := s.store.LoadSession(sessionID)
+	if err != nil {
+		return Session{}, fmt.Errorf("session: resume step: load session %s: %w", sessionID, err)
+	}
+
+	idx, ok := findStepByPane(sess, paneID)
+	if !ok {
+		return Session{}, fmt.Errorf("session: resume step: no step in session %s matches pane %s", sessionID, paneID)
+	}
+	if sess.Steps[idx].Status != StepNeedsInput {
+		return Session{}, fmt.Errorf("session: resume step: step %d (%s) is not needs_input (status=%s)", idx, sess.Steps[idx].AgentName, sess.Steps[idx].Status)
+	}
+
+	sess.Steps[idx].Status = StepRunning
+	sess.UpdatedAt = s.clock.Now()
+
+	if err := s.herdr.PromptAgent(paneID, resumePrompt); err != nil {
+		return Session{}, fmt.Errorf("session: resume step: prompt: %w", err)
+	}
+	if err := s.herdr.SendKeys(paneID, "enter"); err != nil {
+		return Session{}, fmt.Errorf("session: resume step: send enter: %w", err)
+	}
+
+	if err := s.store.SaveSession(sess); err != nil {
+		return Session{}, fmt.Errorf("session: resume step: save session: %w", err)
+	}
+	return sess, nil
+}
+
 // PollForCrashes compares every step currently running or needing input
 // against a live herdr pane list; any step whose pane has disappeared is
 // flipped to failed, the whole session is marked failed (per analyst

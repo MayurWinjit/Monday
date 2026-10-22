@@ -237,3 +237,48 @@ func TestListPanes_FiltersByTabAndPassesWorkspace(t *testing.T) {
 		t.Fatalf("expected --workspace w1 in args, got %v", args)
 	}
 }
+
+func TestPromptAgent_RetriesOnTransientAgentNotFound(t *testing.T) {
+	notFound := `{"id":"x","error":{"code":"agent_not_found","message":"agent target w1:p2 not found"}}`
+	ex := &fakeExecutor{responses: []fakeResponse{
+		{stderr: notFound, exitCode: 1},              // agent prompt: fails
+		{stdout: "", exitCode: 0},                    // agent wait
+		{stdout: `{"id":"x","result":{"agent":{}}}`}, // agent prompt: succeeds
+	}}
+	c := NewWithExecutor(ex)
+	if err := c.PromptAgent("w1:p2", "hello"); err != nil {
+		t.Fatalf("PromptAgent: %v", err)
+	}
+	if len(ex.calls) != 3 {
+		t.Fatalf("expected 3 calls (prompt, wait, prompt), got %d: %v", len(ex.calls), ex.calls)
+	}
+}
+
+func TestPromptAgent_GivesUpAfterMaxAttempts(t *testing.T) {
+	notFound := `{"id":"x","error":{"code":"agent_not_found","message":"agent target w1:p2 not found"}}`
+	responses := []fakeResponse{}
+	for i := 0; i < 5; i++ {
+		responses = append(responses, fakeResponse{stderr: notFound, exitCode: 1}) // agent prompt
+		responses = append(responses, fakeResponse{stdout: "", exitCode: 0})       // agent wait
+	}
+	ex := &fakeExecutor{responses: responses}
+	c := NewWithExecutor(ex)
+	err := c.PromptAgent("w1:p2", "hello")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != "agent_not_found" {
+		t.Fatalf("expected a final agent_not_found error after exhausting retries, got %v", err)
+	}
+}
+
+func TestPromptAgent_NonAgentNotFoundErrorIsNotRetried(t *testing.T) {
+	ex := &fakeExecutor{responses: []fakeResponse{
+		{stderr: `{"id":"x","error":{"code":"some_other_error","message":"nope"}}`, exitCode: 1},
+	}}
+	c := NewWithExecutor(ex)
+	if err := c.PromptAgent("w1:p2", "hello"); err == nil {
+		t.Fatalf("expected an error")
+	}
+	if len(ex.calls) != 1 {
+		t.Fatalf("expected no retry for a non-agent_not_found error, got %d calls", len(ex.calls))
+	}
+}
