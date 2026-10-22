@@ -17,7 +17,7 @@ func (f fakeHerdr) CurrentPaneID() (string, error) { return "w1:p1", f.err }
 func lookPathAllFound(string) (string, error) { return "/usr/bin/x", nil }
 
 func TestInit_RunsCheck(t *testing.T) {
-	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, lookPathAllFound)
+	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
 
 	cmd := m.Init()
@@ -31,7 +31,7 @@ func TestInit_RunsCheck(t *testing.T) {
 }
 
 func TestUpdate_SuccessSwitchesToLaunchWithoutRenderingSuccessView(t *testing.T) {
-	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, lookPathAllFound)
+	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
 
 	_, cmd := m.Update(resultMsg(infratoolcheck.Result{}))
@@ -49,7 +49,7 @@ func TestUpdate_SuccessSwitchesToLaunchWithoutRenderingSuccessView(t *testing.T)
 }
 
 func TestView_FailureState_ListsEachMissingRequirement(t *testing.T) {
-	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, func(name string) (string, error) {
+	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", func(name string) (string, error) {
 		return "", errNotFound(name)
 	})
 	m := New(checker)
@@ -68,7 +68,7 @@ func TestView_TransientOKFrame_DoesNotClaimSomethingIsMissing(t *testing.T) {
 	// itself still has checked=true - bubbletea renders View() on that
 	// returned model before the switch cmd's message is processed. That
 	// one transient frame must not falsely show the failure heading.
-	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, lookPathAllFound)
+	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
 	screen, _ := m.Update(resultMsg(infratoolcheck.Result{}))
 
@@ -87,7 +87,7 @@ func TestView_BeforeFirstResult_ShowsChecking(t *testing.T) {
 }
 
 func TestUpdate_RKeyTriggersRecheck(t *testing.T) {
-	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, lookPathAllFound)
+	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
 	screen, _ := m.Update(resultMsg(infratoolcheck.Result{MissingHerdr: true}))
 
@@ -102,7 +102,7 @@ func TestUpdate_RKeyTriggersRecheck(t *testing.T) {
 }
 
 func TestUpdate_QKeyQuits(t *testing.T) {
-	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, lookPathAllFound)
+	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 	m := New(checker)
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	if cmd == nil {
@@ -113,9 +113,22 @@ func TestUpdate_QKeyQuits(t *testing.T) {
 // New0 builds a Checker whose Run() is never actually invoked in this test
 // (we only check the pre-result view), so its dependencies can be trivial.
 func New0() *infratoolcheck.Checker {
-	return infratoolcheck.NewWithLookPath(fakeHerdr{}, lookPathAllFound)
+	return infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
 }
 
 type errNotFound string
 
 func (e errNotFound) Error() string { return string(e) + ": not found" }
+
+func TestView_AlreadyRunning(t *testing.T) {
+	checker := infratoolcheck.NewWithLookPath(fakeHerdr{}, "", lookPathAllFound)
+	m := New(checker)
+	screen, _ := m.Update(resultMsg(infratoolcheck.Result{AlreadyRunningID: "abc-123"}))
+	view := screen.View(80, 24)
+	if !strings.Contains(view, "abc-123") {
+		t.Fatalf("expected the running session ID shown, got %q", view)
+	}
+	if !strings.Contains(view, "already running") {
+		t.Fatalf("expected an already-running message, got %q", view)
+	}
+}

@@ -173,6 +173,10 @@ func (m Model) View(width, height int) string {
 		b.WriteString("\n" + style.Render(m.saveMsg) + "\n")
 	}
 
-	b.WriteString("\n" + components.HelpBar("↑/↓ move cursor", "shift+↑/↓ reorder", "a add again", "d remove", "s save as...", "enter continue"))
+	if m.savePromptOpen {
+		b.WriteString("\n" + components.HelpBar("enter confirm", "esc cancel"))
+	} else {
+		b.WriteString("\n" + components.HelpBar("↑/↓ move cursor", "shift+↑/↓ reorder", "a add again", "d remove", "s save as...", "enter continue", "q quit"))
+	}
 	return theme.Centered(width, height, b.String())
 }

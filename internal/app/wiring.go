@@ -45,7 +45,7 @@ func Build(homeDir string) (*Services, error) {
 
 	herdrClient := herdr.New()
 	sysClock := clock.System{}
-	toolChecker := toolcheck.New(herdrClient)
+	toolChecker := toolcheck.New(herdrClient, homeDir)
 
 	agentDiscovery := claudeagents.New(homeDir)
 	agentCatalog := domainagent.NewCatalog(agentDiscovery)
