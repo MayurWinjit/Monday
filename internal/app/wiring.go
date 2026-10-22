@@ -18,6 +18,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/infra/fsstore"
 	"github.com/MayurWinjit/monday/internal/infra/herdr"
 	"github.com/MayurWinjit/monday/internal/infra/idgen"
+	"github.com/MayurWinjit/monday/internal/infra/toolcheck"
 )
 
 // Services is the one and only dependency-injection point: cmd/monday
@@ -25,6 +26,7 @@ import (
 // or the notify subcommand.
 type Services struct {
 	Store        *fsstore.Store // bootstrap + domain.Store/Backend implementations
+	ToolCheck    *toolcheck.Checker
 	Agents       *domainagent.Catalog
 	Pipelines    *pipeline.Store
 	Sessions     *session.Service
@@ -43,6 +45,7 @@ func Build(homeDir string) (*Services, error) {
 
 	herdrClient := herdr.New()
 	sysClock := clock.System{}
+	toolChecker := toolcheck.New(herdrClient)
 
 	agentDiscovery := claudeagents.New(homeDir)
 	agentCatalog := domainagent.NewCatalog(agentDiscovery)
@@ -54,6 +57,7 @@ func Build(homeDir string) (*Services, error) {
 
 	return &Services{
 		Store:        store,
+		ToolCheck:    toolChecker,
 		Agents:       agentCatalog,
 		Pipelines:    pipelines,
 		Sessions:     sessions,

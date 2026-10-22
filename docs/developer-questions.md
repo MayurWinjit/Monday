@@ -139,6 +139,22 @@ legitimate "this pane really has no agent" signal, and nothing currently
 depends on it being fast-failing, so masking that with blind retries
 isn't worth the risk for no present benefit.
 
+## 10. `herdr pane run` types into whatever is currently running, it does not replace it
+
+Found while manually smoke-testing the Tool Check screen (build step 12):
+`herdr pane run <pane_id> <command>` behaves like typing the command and
+pressing enter at the pane's shell - if the pane is not actually at an idle
+shell prompt (e.g. a previous alt-screen TUI is still running and blocking
+on input), the "command" text is delivered as keystrokes to whatever is
+running instead of ever becoming a new process. Observed as a confusing
+"the fix isn't working" false alarm: a rebuilt binary appeared to show
+stale output because the *previous* run of the old binary was still alive
+and simply never received a quit keypress. `herdr pane send-keys <pane_id> q`
+(or whatever quits the running program) first, confirmed by an empty
+`pane read`, before the next `pane run` actually launches anything new.
+This is a manual-testing-workflow note, not a product bug, but worth
+recording since it cost real debugging time.
+
 ## 7. `pane list` has no `--tab` filter
 
 Only `--workspace <id>`. `HerdrClient.ListPanes(tabID)` passes

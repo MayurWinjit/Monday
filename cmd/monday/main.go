@@ -15,7 +15,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
 	"github.com/MayurWinjit/monday/internal/infra/socket"
 	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
-	"github.com/MayurWinjit/monday/internal/tui/app/screens/placeholder"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/toolcheck"
 )
 
 func main() {
@@ -26,11 +26,10 @@ func main() {
 }
 
 // runTUI wires internal/app.Services and launches the full-screen TUI. The
-// screen factory below only knows about the placeholder screen for now
-// (build step 11) - later steps replace the initial screen and grow the
-// factory's switch as each real screen is built, without ever needing
-// internal/tui/app itself to import a concrete screen package (see
-// internal/tui/app/model.go's package comment).
+// screen factory grows its switch as each real screen is built (build step
+// 12+), without ever needing internal/tui/app itself to import a concrete
+// screen package (see internal/tui/app/model.go's package comment) - only
+// this composition root does.
 func runTUI() int {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -45,10 +44,17 @@ func runTUI() int {
 	}
 
 	factory := func(id tuiapp.ScreenID, payload any, services *app.Services) tuiapp.Screen {
-		return placeholder.New()
+		switch id {
+		case tuiapp.ScreenToolCheck:
+			return toolcheck.New(services.ToolCheck)
+		default:
+			// Not yet built (build step 13+) - fall back to the tool check
+			// screen rather than panicking on an unhandled ScreenID.
+			return toolcheck.New(services.ToolCheck)
+		}
 	}
 
-	model := tuiapp.New(services, factory, tuiapp.ScreenToolCheck, placeholder.New())
+	model := tuiapp.New(services, factory, tuiapp.ScreenToolCheck, toolcheck.New(services.ToolCheck))
 	if _, err := tea.NewProgram(model, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "monday:", err)
 		return 1
