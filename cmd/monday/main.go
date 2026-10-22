@@ -18,6 +18,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/agentpicker"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/launch"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/pipelineorder"
+	"github.com/MayurWinjit/monday/internal/tui/app/screens/requirement"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/toolcheck"
 )
 
@@ -58,8 +59,11 @@ func runTUI() int {
 		case tuiapp.ScreenPipelineOrder:
 			p, _ := payload.(tuiapp.PipelineOrderPayload)
 			return pipelineorder.New(services, p.Available, p.Sequence)
+		case tuiapp.ScreenRequirement:
+			p, _ := payload.(tuiapp.RequirementPayload)
+			return requirement.New(p.Pipeline)
 		default:
-			// Not yet built (build step 16+) - fall back to the tool check
+			// Not yet built (build step 17+) - fall back to the tool check
 			// screen rather than panicking on an unhandled ScreenID.
 			return toolcheck.New(services.ToolCheck)
 		}

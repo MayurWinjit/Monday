@@ -48,3 +48,10 @@ type PipelineOrderPayload struct {
 	Available []agent.Agent
 	Sequence  []string
 }
+
+// GraphifyPromptPayload carries the resolved pipeline and submitted
+// requirement text into the Graphify Prompt screen.
+type GraphifyPromptPayload struct {
+	Pipeline    pipeline.Pipeline
+	Requirement string
+}
