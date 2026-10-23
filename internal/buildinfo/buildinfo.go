@@ -1,3 +1,8 @@
 package buildinfo
 
-const Version = "0.1.0"
+var Version = "dev"
+
+const (
+	RepoOwner = "MayurWinjit"
+	RepoName  = "Monday"
+)

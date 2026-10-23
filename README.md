@@ -46,9 +46,11 @@ run in a full-screen terminal UI.
 - [TUI Screens](#tui-screens)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [`monday notify`](#monday-notify)
+- [Updating](#updating)
 - [How a Pipeline Runs](#how-a-pipeline-runs)
 - [State on Disk](#state-on-disk)
 - [Architecture](#architecture)
+- [Versioning & Releases](#versioning--releases)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -184,6 +186,22 @@ monday notify --session <session-id> --pane <pane-id> --type QUES|DONE
 
 ---
 
+## Updating
+
+```bash
+monday version          # print the currently installed version
+monday update --check   # check whether a newer release exists, without installing it
+monday update            # check, then prompt before installing the latest release
+monday update --yes      # install the latest release without a confirmation prompt
+```
+
+`monday update` fetches the latest [GitHub release](https://github.com/MayurWinjit/Monday/releases),
+downloads the binary matching your OS/architecture, verifies it against the release's
+`checksums.txt`, and atomically replaces the currently running binary. Restart `monday`
+after an update to use the new version.
+
+---
+
 ## How a Pipeline Runs
 
 ```
@@ -274,12 +292,37 @@ internal/
 
 ---
 
+## Versioning & Releases
+
+Monday follows [Semantic Versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`). Every
+push to `develop` automatically:
+
+1. Runs the full test suite.
+2. Tags a new patch release (`vX.Y.Z` -> `vX.Y.(Z+1)`).
+3. Cross-compiles `darwin/amd64`, `darwin/arm64`, `linux/amd64`, and `linux/arm64` binaries
+   with the version baked in via `-ldflags -X .../buildinfo.Version=vX.Y.Z`.
+4. Publishes a [GitHub release](https://github.com/MayurWinjit/Monday/releases) with those
+   binaries and a `checksums.txt`.
+
+See `.github/workflows/release.yml`. Minor and major bumps are tagged by hand when a
+release warrants one (`git tag vX.Y.0 && git push origin vX.Y.0`).
+
+---
+
 ## Development
 
 ```bash
 go build ./...
 go vet ./...
 go test -race ./...
+golangci-lint run ./...
+```
+
+Or, via the Makefile:
+
+```bash
+make test   # go vet + go test -race
+make lint   # golangci-lint
 ```
 
 Build a release binary with the Makefile:
@@ -287,6 +330,9 @@ Build a release binary with the Makefile:
 ```bash
 make build-macos   # or make build-linux
 ```
+
+Every push and pull request runs two CI jobs (see `.github/workflows/ci.yml`): `quality`
+(gofmt, go vet, golangci-lint) and `test` (build + `go test -race` on Linux and macOS).
 
 A `monday` Claude skill is written to `~/.claude/skills/monday/SKILL.md` on every launch,
 teaching any Claude agent running inside a Monday-managed pane how to notify Monday, where
@@ -301,8 +347,9 @@ Contributions are welcome.
 1. Fork the repository and create a branch from `main`.
 2. Make your change, keeping domain logic, infrastructure, and TUI presentation in their
    existing layers.
-3. Run `go build ./...`, `go vet ./...`, and `go test -race ./...` before opening a PR.
-4. Open a pull request describing what changed and why.
+3. Run `go build ./...`, `go vet ./...`, `go test -race ./...`, and `golangci-lint run ./...`
+   before opening a PR - the `quality` and `test` CI jobs run the same checks on every PR.
+4. Open a pull request using the provided template, describing what changed and why.
 
 Please open an issue first for larger changes so the direction can be agreed on before you
 invest the time.

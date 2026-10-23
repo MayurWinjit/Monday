@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/MayurWinjit/monday/internal/buildinfo"
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
+	domainselfupdate "github.com/MayurWinjit/monday/internal/domain/selfupdate"
 	"github.com/MayurWinjit/monday/internal/infra/socket"
 )
 
@@ -66,3 +71,146 @@ func TestRunNotify_NoSocketListening(t *testing.T) {
 		t.Fatalf("expected exit code 1 when no server is listening, got %d", code)
 	}
 }
+
+type fakeUpdateSource struct {
+	release domainselfupdate.Release
+	err     error
+}
+
+func (f *fakeUpdateSource) LatestRelease() (domainselfupdate.Release, error) {
+	return f.release, f.err
+}
+
+func (f *fakeUpdateSource) Download(url string) ([]byte, error) {
+	return []byte("binary"), nil
+}
+
+type fakeUpdateInstaller struct {
+	installed bool
+	err       error
+}
+
+func (f *fakeUpdateInstaller) Install(data []byte) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.installed = true
+	return nil
+}
+
+func TestRunUpdate_AlreadyUpToDate(t *testing.T) {
+	original := buildinfo.Version
+	buildinfo.Version = "v1.0.0"
+	t.Cleanup(func() { buildinfo.Version = original })
+
+	source := &fakeUpdateSource{release: domainselfupdate.Release{Version: "v1.0.0"}}
+	installer := &fakeUpdateInstaller{}
+	service := domainselfupdate.NewService(source, installer)
+
+	var stdout, stderr bytes.Buffer
+	code := runUpdate(nil, service, &stdout, &stderr, strings.NewReader(""))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "already up to date") {
+		t.Fatalf("expected an up-to-date message, got %q", stdout.String())
+	}
+	if installer.installed {
+		t.Fatalf("expected Install not to be called")
+	}
+}
+
+func TestRunUpdate_CheckOnlyDoesNotInstall(t *testing.T) {
+	source := &fakeUpdateSource{release: domainselfupdate.Release{Version: "v99.0.0"}}
+	installer := &fakeUpdateInstaller{}
+	service := domainselfupdate.NewService(source, installer)
+
+	var stdout, stderr bytes.Buffer
+	code := runUpdate([]string{"--check"}, service, &stdout, &stderr, strings.NewReader(""))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "v99.0.0") {
+		t.Fatalf("expected the new version to be mentioned, got %q", stdout.String())
+	}
+	if installer.installed {
+		t.Fatalf("expected --check to not install anything")
+	}
+}
+
+func TestRunUpdate_DeclinedConfirmationDoesNotInstall(t *testing.T) {
+	source := &fakeUpdateSource{release: domainselfupdate.Release{Version: "v99.0.0"}}
+	installer := &fakeUpdateInstaller{}
+	service := domainselfupdate.NewService(source, installer)
+
+	var stdout, stderr bytes.Buffer
+	code := runUpdate(nil, service, &stdout, &stderr, strings.NewReader("n\n"))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "cancelled") {
+		t.Fatalf("expected a cancellation message, got %q", stdout.String())
+	}
+	if installer.installed {
+		t.Fatalf("expected a declined confirmation to not install anything")
+	}
+}
+
+func TestRunUpdate_ConfirmedInstallsAndSucceeds(t *testing.T) {
+	source := &fakeUpdateSource{release: domainselfupdate.Release{
+		Version: "v99.0.0",
+		Assets: []domainselfupdate.Asset{
+			{Name: domainselfupdate.AssetName(runtime.GOOS, runtime.GOARCH), URL: "https://example.com/binary"},
+		},
+	}}
+	installer := &fakeUpdateInstaller{}
+	service := domainselfupdate.NewService(source, installer)
+
+	var stdout, stderr bytes.Buffer
+	code := runUpdate(nil, service, &stdout, &stderr, strings.NewReader("y\n"))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if !installer.installed {
+		t.Fatalf("expected Install to be called")
+	}
+	if !strings.Contains(stdout.String(), "updated to v99.0.0") {
+		t.Fatalf("expected a success message, got %q", stdout.String())
+	}
+}
+
+func TestRunUpdate_YesFlagSkipsConfirmation(t *testing.T) {
+	source := &fakeUpdateSource{release: domainselfupdate.Release{
+		Version: "v99.0.0",
+		Assets: []domainselfupdate.Asset{
+			{Name: domainselfupdate.AssetName(runtime.GOOS, runtime.GOARCH), URL: "https://example.com/binary"},
+		},
+	}}
+	installer := &fakeUpdateInstaller{}
+	service := domainselfupdate.NewService(source, installer)
+
+	var stdout, stderr bytes.Buffer
+	code := runUpdate([]string{"--yes"}, service, &stdout, &stderr, strings.NewReader(""))
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
+	}
+	if !installer.installed {
+		t.Fatalf("expected --yes to install without a prompt")
+	}
+}
+
+func TestRunUpdate_SourceErrorReturnsExitCode1(t *testing.T) {
+	source := &fakeUpdateSource{err: errUpdateBoom{}}
+	installer := &fakeUpdateInstaller{}
+	service := domainselfupdate.NewService(source, installer)
+
+	var stdout, stderr bytes.Buffer
+	code := runUpdate(nil, service, &stdout, &stderr, strings.NewReader(""))
+	if code != 1 {
+		t.Fatalf("expected exit code 1, got %d", code)
+	}
+}
+
+type errUpdateBoom struct{}
+
+func (errUpdateBoom) Error() string { return "boom" }

@@ -1,15 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/MayurWinjit/monday/internal/app"
+	"github.com/MayurWinjit/monday/internal/buildinfo"
 	"github.com/MayurWinjit/monday/internal/domain/notifyproto"
+	domainselfupdate "github.com/MayurWinjit/monday/internal/domain/selfupdate"
+	infraselfupdate "github.com/MayurWinjit/monday/internal/infra/selfupdate"
 	"github.com/MayurWinjit/monday/internal/infra/socket"
 	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
 	"github.com/MayurWinjit/monday/internal/tui/app/screens/agentpicker"
@@ -22,8 +28,16 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "notify" {
-		os.Exit(runNotify(os.Args[2:]))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "notify":
+			os.Exit(runNotify(os.Args[2:]))
+		case "update":
+			os.Exit(runUpdate(os.Args[2:], buildUpdateService(), os.Stdout, os.Stderr, os.Stdin))
+		case "version", "--version", "-v":
+			fmt.Println(buildinfo.Version)
+			os.Exit(0)
+		}
 	}
 	os.Exit(runTUI())
 }
@@ -131,5 +145,59 @@ func runNotify(args []string) int {
 		fmt.Fprintln(os.Stderr, "monday notify: rejected:", ack.Error)
 		return 1
 	}
+	return 0
+}
+
+func buildUpdateService() *domainselfupdate.Service {
+	source := infraselfupdate.NewGitHubSource(buildinfo.RepoOwner, buildinfo.RepoName)
+	return domainselfupdate.NewService(source, infraselfupdate.BinaryInstaller{})
+}
+
+func runUpdate(args []string, service *domainselfupdate.Service, stdout, stderr io.Writer, stdin io.Reader) int {
+	fs := flag.NewFlagSet("monday update", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	checkOnly := fs.Bool("check", false, "only check whether an update is available, do not install it")
+	yes := fs.Bool("yes", false, "install the update without asking for confirmation")
+	fs.Usage = func() {
+		_, _ = fmt.Fprintln(stderr, "usage: monday update [--check] [--yes]")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	result, err := service.Check(buildinfo.Version)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "monday update:", err)
+		return 1
+	}
+
+	if !result.Newer {
+		_, _ = fmt.Fprintf(stdout, "monday is already up to date (%s)\n", result.Current)
+		return 0
+	}
+	_, _ = fmt.Fprintf(stdout, "a new version is available: %s -> %s\n", result.Current, result.Latest.Version)
+
+	if *checkOnly {
+		return 0
+	}
+
+	if !*yes {
+		_, _ = fmt.Fprint(stdout, "install this update now? [y/N] ")
+		reader := bufio.NewReader(stdin)
+		answer, _ := reader.ReadString('\n')
+		if strings.TrimSpace(strings.ToLower(answer)) != "y" {
+			_, _ = fmt.Fprintln(stdout, "update cancelled")
+			return 0
+		}
+	}
+
+	_, _ = fmt.Fprintf(stdout, "downloading %s...\n", result.Latest.Version)
+	if err := service.Apply(result.Latest); err != nil {
+		_, _ = fmt.Fprintln(stderr, "monday update:", err)
+		return 1
+	}
+
+	_, _ = fmt.Fprintf(stdout, "updated to %s - restart monday to use the new version\n", result.Latest.Version)
 	return 0
 }

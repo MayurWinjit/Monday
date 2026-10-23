@@ -15,6 +15,7 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/layout"
 	"github.com/MayurWinjit/monday/internal/domain/pipeline"
 	"github.com/MayurWinjit/monday/internal/domain/session"
+	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
 )
 
 type fakeDiscoverer struct {
@@ -222,8 +223,8 @@ func TestUpdate_AgentsLoaded_UnknownAgentShowsBannerNotSwitch(t *testing.T) {
 		t.Fatalf("expected a banner command for an unresolvable agent")
 	}
 	msg := cmd()
-	if _, ok := msg.(tea.Msg); !ok {
-		t.Fatalf("expected a tea.Msg from the banner command")
+	if _, ok := msg.(tuiapp.BannerMsg); !ok {
+		t.Fatalf("expected a BannerMsg from the banner command, got %T", msg)
 	}
 }
 

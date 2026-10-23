@@ -196,10 +196,10 @@ func writeFileAtomic(path string, data []byte) error {
 		return fmt.Errorf("fsstore: create temp in %s: %w", dir, err)
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("fsstore: write temp %s: %w", tmpPath, err)
 	}
 	if err := tmp.Close(); err != nil {

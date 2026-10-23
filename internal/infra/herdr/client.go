@@ -283,7 +283,7 @@ func (c *Client) retryOnAgentNotFound(paneID string, fn func() error) error {
 		if !errors.As(lastErr, &apiErr) || apiErr.Code != "agent_not_found" {
 			return lastErr
 		}
-		c.exec.Run("agent", "wait", paneID, "--until", "idle", "--timeout", "3000")
+		_, _, _, _ = c.exec.Run("agent", "wait", paneID, "--until", "idle", "--timeout", "3000")
 	}
 	return lastErr
 }

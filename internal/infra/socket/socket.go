@@ -73,7 +73,7 @@ func (s *Server) Listen(sessionID string) (<-chan notifyproto.NotifyMessage, fun
 }
 
 func handleConn(conn net.Conn, sessionID string, events chan<- notifyproto.NotifyMessage) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	var msg notifyproto.NotifyMessage
 	if err := json.NewDecoder(conn).Decode(&msg); err != nil {
@@ -104,7 +104,7 @@ func (c *Client) Send(socketPath string, msg notifyproto.NotifyMessage) (notifyp
 	if err != nil {
 		return notifyproto.NotifyAck{}, fmt.Errorf("socket: dial %s: %w", socketPath, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := json.NewEncoder(conn).Encode(msg); err != nil {
 		return notifyproto.NotifyAck{}, fmt.Errorf("socket: send message: %w", err)
