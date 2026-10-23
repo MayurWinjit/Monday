@@ -98,3 +98,32 @@ func ProgressRow(step session.PipelineStep, elapsed time.Duration, selected bool
 func HelpBar(bindings ...string) string {
 	return theme.HelpBarStyle.Render(strings.Join(bindings, " · "))
 }
+
+func WrapIndent(width int, marker string, style lipgloss.Style, text string) string {
+	indentWidth := lipgloss.Width(marker)
+	wrapWidth := width - indentWidth
+	if wrapWidth < 10 {
+		wrapWidth = 10
+	}
+	rendered := style.Width(wrapWidth).Render(text)
+	lines := strings.Split(rendered, "\n")
+	pad := strings.Repeat(" ", indentWidth)
+	for i, line := range lines {
+		if i == 0 {
+			lines[i] = marker + line
+		} else {
+			lines[i] = pad + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func SpaceBetween(width int, left, right string) string {
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	gap := width - leftWidth - rightWidth
+	if gap < 1 {
+		return left + "\n" + right
+	}
+	return left + strings.Repeat(" ", gap) + right
+}

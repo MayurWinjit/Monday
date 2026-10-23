@@ -80,3 +80,23 @@ func TooSmall(width, height int) string {
 	}
 	return Centered(width, height, msg)
 }
+
+const (
+	MaxContentWidth = 84
+	contentMargin   = 8
+	minContentWidth = 20
+)
+
+func ContentWidth(width int) int {
+	w := width - contentMargin
+	if w > MaxContentWidth {
+		w = MaxContentWidth
+	}
+	if w < minContentWidth {
+		w = minContentWidth
+		if width > 0 && width < w {
+			w = width
+		}
+	}
+	return w
+}

@@ -11,23 +11,10 @@ import (
 	"github.com/MayurWinjit/monday/internal/domain/agent"
 	"github.com/MayurWinjit/monday/internal/domain/pipeline"
 	tuiapp "github.com/MayurWinjit/monday/internal/tui/app"
+	"github.com/MayurWinjit/monday/internal/tui/brand"
 	"github.com/MayurWinjit/monday/internal/tui/components"
 	"github.com/MayurWinjit/monday/internal/tui/theme"
 )
-
-const banner = ` 
- /$$      /$$                           /$$                    
-| $$$    /$$$                          | $$                    
-| $$$$  /$$$$  /$$$$$$  /$$$$$$$   /$$$$$$$  /$$$$$$  /$$   /$$
-| $$ $$/$$ $$ /$$__  $$| $$__  $$ /$$__  $$ |____  $$| $$  | $$
-| $$  $$$| $$| $$  \ $$| $$  \ $$| $$  | $$  /$$$$$$$| $$  | $$
-| $$\  $ | $$| $$  | $$| $$  | $$| $$  | $$ /$$__  $$| $$  | $$
-| $$ \/  | $$|  $$$$$$/| $$  | $$|  $$$$$$$|  $$$$$$$|  $$$$$$$
-|__/     |__/ \______/ |__/  |__/ \_______/ \_______/ \____  $$
-                                                      /$$  | $$
-                                                     |  $$$$$$/
-                                                      \______/ 
-`
 
 type Model struct {
 	services *app.Services
@@ -175,7 +162,7 @@ func (m Model) View(width, height int) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(theme.Heading.Render(banner) + "\n\n")
+	b.WriteString(theme.Heading.Render(brand.ASCII) + "\n\n")
 
 	if m.alreadyRunningID != "" {
 		if m.terminated {

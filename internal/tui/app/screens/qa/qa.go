@@ -227,12 +227,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 func (m Model) View(width, height int) string {
 	q := m.currentQuestion()
+	cw := theme.ContentWidth(width)
 
 	var b strings.Builder
 	b.WriteString(theme.Dim.Render(fmt.Sprintf("Question %d of %d", m.cursor+1, len(m.questions))) + "\n\n")
-	b.WriteString(theme.Heading.Render(q.Question) + "\n")
+	b.WriteString(theme.Heading.Width(cw).Render(q.Question) + "\n")
 	if q.Description != "" {
-		b.WriteString(theme.Dim.Render(q.Description) + "\n")
+		b.WriteString(theme.Dim.Width(cw).Render(q.Description) + "\n")
 	}
 	b.WriteString("\n")
 
@@ -249,7 +250,9 @@ func (m Model) View(width, height int) string {
 		}
 
 		if isOther && m.typingOther {
-			b.WriteString(marker + m.other.View() + "\n")
+			other := m.other
+			other.Width = cw - lipgloss.Width(marker)
+			b.WriteString(marker + other.View() + "\n")
 			continue
 		}
 		if isOther {
@@ -257,14 +260,14 @@ func (m Model) View(width, height int) string {
 				label = fmt.Sprintf("Other: %s", answer)
 			}
 		}
-		b.WriteString(marker + style.Render(label) + "\n")
+		b.WriteString(components.WrapIndent(cw, marker, style, label) + "\n")
 	}
 
 	b.WriteString("\n" + theme.Dim.Render(fmt.Sprintf("%d of %d answered", m.answeredCount(), len(m.questions))) + "\n\n")
 
 	b.WriteString(components.Button("Submit answers", m.focusOnSubmit) + "\n")
 	if m.err != "" {
-		b.WriteString("\n" + theme.ErrorText.Render(m.err) + "\n")
+		b.WriteString("\n" + theme.ErrorText.Width(cw).Render(m.err) + "\n")
 	}
 	b.WriteString("\n" + components.HelpBar("↑/↓ option", "←/→ question", "enter select", "tab submit (once all answered)", "esc close"))
 
