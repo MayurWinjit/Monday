@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/MayurWinjit/monday/internal/domain"
 	"github.com/MayurWinjit/monday/internal/domain/graphify"
@@ -247,16 +248,22 @@ type agentStartResult struct {
 	Argv  []string `json:"argv"`
 }
 
+func (c *Client) waitAgentIdle(paneID string, timeoutMS int) error {
+	_, stderr, exitCode, err := c.exec.Run("agent", "wait", paneID, "--until", "idle", "--timeout", fmt.Sprintf("%d", timeoutMS))
+	if err != nil {
+		return fmt.Errorf("agent wait: %w", err)
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("agent wait: exit %d: %s", exitCode, strings.TrimSpace(string(stderr)))
+	}
+	return nil
+}
+
 func (c *Client) StartAgent(paneID, agentName string) error {
 	_, err := call[agentStartResult](c.exec, "agent", "start", agentName, "--kind", "claude", "--pane", paneID, "--", "--agent", agentName)
 	if err == nil {
-
-		_, waitStderr, waitExit, waitErr := c.exec.Run("agent", "wait", paneID, "--until", "idle", "--timeout", "10000")
-		if waitErr != nil {
-			return fmt.Errorf("herdr: start agent %s in pane %s: agent wait: %w", agentName, paneID, waitErr)
-		}
-		if waitExit != 0 {
-			return fmt.Errorf("herdr: start agent %s in pane %s: agent wait: exit %d: %s", agentName, paneID, waitExit, strings.TrimSpace(string(waitStderr)))
+		if waitErr := c.waitAgentIdle(paneID, 10000); waitErr != nil {
+			return fmt.Errorf("herdr: start agent %s in pane %s: %w", agentName, paneID, waitErr)
 		}
 		return nil
 	}
@@ -268,8 +275,23 @@ func (c *Client) StartAgent(paneID, agentName string) error {
 	if exitCode != 0 {
 		return fmt.Errorf("herdr: start agent %s in pane %s: agent start failed (%v), pane run fallback exit %d: %s", agentName, paneID, err, exitCode, strings.TrimSpace(string(stderr)))
 	}
+
+	// The pane-run fallback bypasses herdr's own agent-start readiness check
+	// (the pane may not have been at its shell prompt yet when "agent start"
+	// was attempted), so we must wait here too, otherwise the caller's very
+	// next PromptAgent call can race herdr's background agent detection and
+	// fail with agent_not_found before the agent even exists.
+	if waitErr := c.waitAgentIdle(paneID, 15000); waitErr != nil {
+		return fmt.Errorf("herdr: start agent %s in pane %s: pane run fallback: %w", agentName, paneID, waitErr)
+	}
 	return nil
 }
+
+// retryNotFoundSleep is overridable in tests to avoid real sleeps while
+// still exercising the backoff-floor logic below.
+var retryNotFoundSleep = time.Sleep
+
+const retryNotFoundFloor = 750 * time.Millisecond
 
 func (c *Client) retryOnAgentNotFound(paneID string, fn func() error) error {
 	const maxAttempts = 5
@@ -283,7 +305,16 @@ func (c *Client) retryOnAgentNotFound(paneID string, fn func() error) error {
 		if !errors.As(lastErr, &apiErr) || apiErr.Code != "agent_not_found" {
 			return lastErr
 		}
+		// herdr's "agent wait" returns immediately (rather than blocking for
+		// the timeout) when the agent truly doesn't exist yet, which would
+		// otherwise turn this retry loop into a sub-100ms busy-fail loop.
+		// Enforce a real minimum delay so the agent has a chance to be
+		// detected before we give up.
+		waitStart := time.Now()
 		_, _, _, _ = c.exec.Run("agent", "wait", paneID, "--until", "idle", "--timeout", "3000")
+		if elapsed := time.Since(waitStart); elapsed < retryNotFoundFloor {
+			retryNotFoundSleep(retryNotFoundFloor - elapsed)
+		}
 	}
 	return lastErr
 }

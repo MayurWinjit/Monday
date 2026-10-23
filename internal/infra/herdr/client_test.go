@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/MayurWinjit/monday/internal/domain/layout"
 )
@@ -152,16 +153,32 @@ func TestStartAgent_FallsBackToPaneRun(t *testing.T) {
 	ex := &fakeExecutor{responses: []fakeResponse{
 		{stderr: `{"id":"x","error":{"code":"unknown_command","message":"agent start unsupported"}}`, exitCode: 1},
 		{stdout: "", exitCode: 0},
+		{stdout: "", exitCode: 0},
 	}}
 	c := NewWithExecutor(ex)
 	if err := c.StartAgent("w1:p2", "architect"); err != nil {
 		t.Fatalf("StartAgent fallback: %v", err)
 	}
-	if len(ex.calls) != 2 {
-		t.Fatalf("expected 2 calls (agent start then pane run), got %d: %v", len(ex.calls), ex.calls)
+	if len(ex.calls) != 3 {
+		t.Fatalf("expected 3 calls (agent start, pane run, agent wait), got %d: %v", len(ex.calls), ex.calls)
 	}
 	if ex.calls[1][0] != "pane" || ex.calls[1][1] != "run" {
 		t.Fatalf("expected fallback call to be `pane run ...`, got %v", ex.calls[1])
+	}
+	if ex.calls[2][0] != "agent" || ex.calls[2][1] != "wait" {
+		t.Fatalf("expected the pane run fallback to be followed by `agent wait ...` so callers don't race herdr's own agent detection, got %v", ex.calls[2])
+	}
+}
+
+func TestStartAgent_FallbackWaitFailureIsReported(t *testing.T) {
+	ex := &fakeExecutor{responses: []fakeResponse{
+		{stderr: `{"id":"x","error":{"code":"unknown_command","message":"agent start unsupported"}}`, exitCode: 1},
+		{stdout: "", exitCode: 0},
+		{stderr: "agent_not_found", exitCode: 1},
+	}}
+	c := NewWithExecutor(ex)
+	if err := c.StartAgent("w1:p2", "architect"); err == nil {
+		t.Fatalf("expected an error when the pane run fallback never becomes idle")
 	}
 }
 
@@ -234,7 +251,15 @@ func TestListPanes_FiltersByTabAndPassesWorkspace(t *testing.T) {
 	}
 }
 
+func withNoRetrySleep(t *testing.T) {
+	t.Helper()
+	original := retryNotFoundSleep
+	retryNotFoundSleep = func(time.Duration) {}
+	t.Cleanup(func() { retryNotFoundSleep = original })
+}
+
 func TestPromptAgent_RetriesOnTransientAgentNotFound(t *testing.T) {
+	withNoRetrySleep(t)
 	notFound := `{"id":"x","error":{"code":"agent_not_found","message":"agent target w1:p2 not found"}}`
 	ex := &fakeExecutor{responses: []fakeResponse{
 		{stderr: notFound, exitCode: 1},
@@ -251,6 +276,7 @@ func TestPromptAgent_RetriesOnTransientAgentNotFound(t *testing.T) {
 }
 
 func TestPromptAgent_GivesUpAfterMaxAttempts(t *testing.T) {
+	withNoRetrySleep(t)
 	notFound := `{"id":"x","error":{"code":"agent_not_found","message":"agent target w1:p2 not found"}}`
 	responses := []fakeResponse{}
 	for i := 0; i < 5; i++ {
@@ -263,6 +289,28 @@ func TestPromptAgent_GivesUpAfterMaxAttempts(t *testing.T) {
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || apiErr.Code != "agent_not_found" {
 		t.Fatalf("expected a final agent_not_found error after exhausting retries, got %v", err)
+	}
+}
+
+func TestPromptAgent_EnforcesMinimumBackoffWhenAgentWaitReturnsInstantly(t *testing.T) {
+	notFound := `{"id":"x","error":{"code":"agent_not_found","message":"agent target w1:p2 not found"}}`
+	ex := &fakeExecutor{responses: []fakeResponse{
+		{stderr: notFound, exitCode: 1},
+		{stdout: "", exitCode: 0},
+		{stdout: `{"id":"x","result":{"agent":{}}}`},
+	}}
+	c := NewWithExecutor(ex)
+
+	var slept time.Duration
+	original := retryNotFoundSleep
+	retryNotFoundSleep = func(d time.Duration) { slept = d }
+	t.Cleanup(func() { retryNotFoundSleep = original })
+
+	if err := c.PromptAgent("w1:p2", "hello"); err != nil {
+		t.Fatalf("PromptAgent: %v", err)
+	}
+	if slept <= 0 || slept > retryNotFoundFloor {
+		t.Fatalf("expected a backoff sleep close to the %s floor since the fake agent wait returns instantly, got %s", retryNotFoundFloor, slept)
 	}
 }
 
